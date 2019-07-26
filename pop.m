@@ -11,6 +11,9 @@
 :- import_module maybe.
 :- include_module pop.poset.
 :- import_module pop.poset.
+:- import_module require.
+
+%Note: its stuck in (what feels like) an infinite loop now.
 
 :- type object
          ---> a
@@ -42,7 +45,8 @@
 
 	     
 	     
-:- type plan == {set(action), poset(action_name), set(causal_link)}. 
+:- type plan == {set(action), poset(action_name), set(causal_link)}.
+:- type agenda == list({ground_literal, action_name}).
 
 
 
@@ -141,7 +145,7 @@ actions = [
     	[on(c, b)],
     	[on(c, table), clear(b)])
     ].
-
+ 
 
 :- pred providers(pop.ground_literal, set(pop.action), list.list(pop.action), action_name).
 :- mode providers(in, in, in, out) is nondet.
@@ -180,7 +184,9 @@ add_precond_to_agenda(Action, Precond, !Agenda):-
 :- mode link_threathens(in, in, in, out) is nondet.
 link_threathens(causal_link(A_p, A_c, Q), Order, Actions, A_t):-
     member(A_t, Actions),
-    member(Q, remove(A_t)),
+    A_p \= A_t^name,
+    A_c \= A_t^name,
+    member(Q, remove(A_t)), 
     poset.orderable(A_p, name(A_t), Order),
     poset.orderable(name(A_t), A_c, Order).
 
@@ -188,6 +194,8 @@ link_threathens(causal_link(A_p, A_c, Q), Order, Actions, A_t):-
 :- mode action_threathens(in, in, in, out, out) is nondet.
 action_threathens(A_t, Order, Links, A_p, A_c):-
     member(Q, remove(A_t)),
+    A_p \= A_t^name,
+    A_c \= A_t^name,
     member(causal_link(A_p, A_c, Q), Links), 
     poset.orderable(A_p, name(A_t), Order),
     poset.orderable(name(A_t), A_c, Order).
@@ -200,119 +208,125 @@ fix_constraint(A_p, A_t, A_c, !Order):-
     ;
     poset.orderable(A_c, A_t, !.Order),
     poset.add(A_c, A_t, !Order).
-	
-:- pred pop(list.list({pop.ground_literal, action_name}), {action_name, action_name}, {set(pop.action), pop.poset.poset(action_name), set(pop.causal_link)}, {set(pop.action), pop.poset.poset(action_name), set(pop.causal_link)}).
-:- mode pop(in, in, in, out) is cc_nondet.
-pop(Agenda, Closure, !Plan):-
+
+:- pred verify_link_threat(pop.causal_link, set.set(pop.action), pop.poset.poset(string), pop.poset.poset(string)).
+:- mode verify_link_threat(in, in, in, out) is nondet.
+verify_link_threat(causal_link(Add, Need, Q), Actions, !Order ):-
     (if
-	Agenda = [{Q, Need}|Xs]
+	link_threathens(causal_link(Add, Need, Q), !.Order, Actions, A_t)
+	then
+	    fix_constraint(Add, name(A_t), Need, !Order)
+	else
+	    !.Order = !:Order
+	).
+
+:- pred add_new_action(string, {string, string}, list.list({pop.ground_literal, string}), list.list({pop.ground_literal, string}), {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}).
+:- mode add_new_action(in, in, in, out, in, out) is nondet.
+
+add_new_action(Need, Closure, !Agenda, !Plan):-
+    !.Plan = {A_old, O_old, L},
+    !:Plan = {A_new, O_new, L},
+    member(Full_Add, actions), 
+    name(Full_Add) = Add, 
+    set.insert(Full_Add, A_old, A_new), 
+    %new action instance added to A
+    establish_action_order(Add, Need, Closure, O_old, O_mid),
+    add_precond_to_agenda(Add, preconditions(Full_Add), !.Agenda, !:Agenda),
+    (if
+	action_threathens(Full_Add, O_mid, L, A_p, A_c)
+    then
+	fix_constraint(A_p, Add, A_c, O_mid, O_new) 
+    else
+	O_new = O_mid
+    ).
+
+
+
+:- pred pop(int, agenda, set({agenda, plan}), {action_name, action_name}, plan, plan).
+
+
+%:- pragma minimal_model(pop/4).
+
+
+%There is an infinite loop in here, somewhere.
+%I have no clue as to what is causing it. I should get a break from this for a while.
+:- mode pop(in, in, in, in, in, out) is nondet.
+pop(Depth, Agenda, PastPlans, Closure, !Plan):-
+    (if
+	Depth > 0
     then
 	!.Plan = {Actions, Order, Links},
-	providers(Q, Actions, actions, Add),
-	set.insert(causal_link(Add, Need, Q), Links, L_New),
 	(if
-	    link_threathens(causal_link(Add, Need, Q), Order, Actions, A_t)
+	    Agenda = [{Q, Need}|Xs]
 	then
-	    fix_constraint(Add, name(A_t), Need, Order, O_mid)
-	else
-	    Order = O_mid
-	),
-	(if
-	    member(Full_Add, Actions),
-	    name(Full_Add) = Add
-	then
-	    A_New = Actions,
-	    Ag_New = Xs,
-	    poset.add(Add, Need, O_mid, O_New)
-	else
-	    member(Full_Add, actions),
-	    name(Full_Add) = Add,
-	    set.insert(Full_Add, Actions, A_New),
+	    providers(Q, Actions, actions, Add),
+	    NewLink = causal_link(Add, Need, Q),
+	    set.insert(NewLink, Links, L_1), %L_New = L_1
+	    poset.orderable(Add, Need, Order),  
+	    poset.add(Add, Need, Order, O_1),
+	    verify_link_threat(NewLink, Actions, O_1, O_2),
 	    (if
-		action_threathens(Full_Add, O_mid, L_New, A_p, A_c)
+		member(Full_Add, Actions),
+		name(Full_Add) = Add
 	    then
-		fix_constraint(A_p, Add, A_c, O_mid, O_mid2)
+		Xs = Ag_New,
+		NewPlan = {Actions, O_2, L_1}
 	    else
-		O_mid2 = O_mid
-	    ),
+		add_new_action(Need, Closure, Agenda, Ag_New, {Actions, O_2, L_1}, NewPlan)
 		
-	    %new action instance added to A
-	    establish_action_order(Add, Need, Closure, O_mid2, O_New),
-	    add_precond_to_agenda(Add, preconditions(Full_Add), Agenda, Ag_New)
-		
-	    ),
-            pop(Ag_New, Closure, {A_New, O_New, L_New}, !:Plan) 		
-	    else
-		!.Plan = !:Plan
-	    ).
-		
-
-
-
-
-% :- pred regws_wrap(set(ground_literal), set(ground_literal), set(set(ground_literal)), list(regws.action), maybe(list(regws.action)), maybe(list(regws.action))).
-% :- mode regws_wrap(in, in, in, in, in, out) is nondet.
-% :- mode regws_wrap(in, in, in, in, in, out) is cc_nondet.
-
-% regws_wrap(InitState, CurGoals, PastGoals, Actions, !Path):-
-%     nondet_int_in_range(1, 12, Depth),
-%     regws(Depth, InitState, CurGoals, PastGoals, Actions, !Path).
-
-% :- pred regws(int, set(ground_literal), set(ground_literal), set(set(ground_literal)), list(regws.action), maybe(list(regws.action)), maybe(list(regws.action))).
-% :- mode regws(in, in, in, in, in, in, out) is nondet.
-% :- mode regws(in, in, in, in, in, in, out) is cc_nondet.
-
-% regws(Depth, InitState, CurGoals, PastGoals, Actions, !Path):-
-%     (if
-% 	Depth > 0
-%     then	
-% 	(if
-% 	    set.subset(CurGoals, InitState)
-% 	then
-% 	    !.Path = !:Path
-% 	else
-% 	    (if
-% 		member(Act, Actions),
-% 		some [X] (member(X, add(Act)), member(X, CurGoals)),
-% 		\+ (some [Y] (member(Y, remove(Act)), member(Y, CurGoals))),
-% 		!.Path = yes(PathSoFar)
-% 	then
-% 	    delete_list(add(Act), CurGoals, Mid),
-% 	    insert_list(preconditions(Act), Mid, G),
-% 	    \+ member(G, PastGoals),
+            ),
 	    
-% 	    regws(Depth-1, InitState, G, set.insert(PastGoals, G), Actions, yes([Act|PathSoFar]), !:Path)
-% 	else
-% 	    !:Path = no))
-% 	else
-% 	    fail).
+		\+ member({Ag_New, NewPlan}, PastPlans),
+		set.insert({Ag_New, NewPlan}, PastPlans, NewRecord),
+		pop(Depth-1, Ag_New, NewRecord, Closure, NewPlan,!:Plan) 		
+	    else
+		(if % *all conjuncts of every action's precondition need to be supported by causal links*
+		    (member(A, Actions), member(Q, preconditions(A))) => member(causal_link(_, _, Q), Links) 
+		then
+		    !.Plan = !:Plan
+		else
+		    error("Something is up with the algorithm")
+		)
+	    )
+	else
+	    fail).
 
+:- pred pop_wrap(list.list({pop.ground_literal, string}), {string, string}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}).
+:- mode pop_wrap(in, in, in, out) is nondet.
+pop_wrap(Agenda, Closure, !Plan):-
+    nondet_int_in_range(1, 12, Depth),
+    pop(Depth, Agenda, set.init, Closure, !Plan).
 
-
-
-
-:- pred printPath(list.list(action), io.state, io.state).
-:- mode printPath(in, di, uo) is det. 
-printPath(Path, !IO):-
+main(!IO):-
+    NullAction = set.from_list([
+	action(
+	    "initial-state",
+	    [],
+	    [on(a, table), on(b, table), on(c, a), clear(b), clear(c)],
+	    []),
+	action(
+	    "goal-state",
+	    [on(a, b), on(b, c)],
+	    [],
+	    [])
+	]),
+    poset.add("initial-state", "goal-state", poset.init, NullOrder),
+    NullPlan = {NullAction, NullOrder, set.init},
+    Closure = {"initial-state", "goal-state"},
+    Agenda = [{on(b, c), "goal-state"}, {on(a, b), "goal-state"} ],
     (if
-	Path = [Head|Tail]
+	pop_wrap(Agenda, Closure, NullPlan, {_, OutOrder, _})
+	%poset.orderable("move-B-from-T-to-C", "move-A-from-T-to-C", OutOrder)
+	%only generates the correct answer once the constraint above constraints are added - suggests there is something wrong with my poset implementation
+	
     then
-	print(name(Head), !IO),
+	poset.to_total(OutOrder, OutPlan),
+	print(OutPlan, !IO),
 	nl(!IO),
-	printPath(Tail, !IO)
+	nl(!IO),
+	print(OutOrder, !IO)
     else
-	print("End", !IO)).
-
-
-
-
-main(!IO).% :-
-    % (if
-    % 	regws_wrap(set.from_list([on(a, table), on(b, table), on(c, a), clear(b), clear(c)]), set.from_list([on(a, b), on(b, c)]), set.init, actions, yes([]), Path),
-    % 	Path = yes(ActualPath)
-    % then
-    % 	printPath(ActualPath, !IO)
-    % else
-    % 	write("No path found.", !IO),
-    % 	nl(!IO)
-    % ).
+	write("No solution found.", !IO),
+	nl(!IO)
+    ).
+	
