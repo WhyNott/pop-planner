@@ -52,6 +52,16 @@
 
 :- func actions = list.list(action).
 actions = [
+    action(%
+	"move-B-from-T-to-C",
+	[clear(c), on(b, table), clear(b)],
+	[on(b, c)],
+	[on(b, table), clear(c)]),
+     action(%
+	"move-A-from-T-to-B",
+	[on(a, table), clear(a), clear(b)],
+	[on(a, b)],
+	[on(a, table), clear(b)]),
     action(
     	"move-A-from-B-to-C",
     	[on(a, b), clear(a), clear(c)],
@@ -114,11 +124,7 @@ actions = [
 	[on(c, table), clear(a)],
 	[on(c, a)]),
     
-    action(%
-	"move-A-from-T-to-B",
-	[on(a, table), clear(a), clear(b)],
-	[on(a, b)],
-	[on(a, table), clear(b)]),
+    
     action(
     	"move-A-from-T-to-C",
     	[on(a, table), clear(a), clear(c)],
@@ -129,11 +135,6 @@ actions = [
     	[on(b, table), clear(b), clear(a)],
     	[on(b, a)],
     	[on(b, table), clear(a)]),
-    action(%
-	"move-B-from-T-to-C",
-	[on(b, table), clear(b), clear(c)],
-	[on(b, c)],
-	[on(b, table), clear(c)]),
     action(
     	"move-C-from-T-to-A",
     	[on(c, table), clear(c), clear(a)],
@@ -250,6 +251,7 @@ add_new_action(Need, Closure, !Agenda, !Plan):-
 
 %There is an infinite loop in here, somewhere.
 %I have no clue as to what is causing it. I should get a break from this for a while.
+%After a break, I still don't know. But worry not, I shall find out.
 :- mode pop(in, in, in, in, in, out) is nondet.
 pop(Depth, Agenda, PastPlans, Closure, !Plan):-
     (if
@@ -266,20 +268,20 @@ pop(Depth, Agenda, PastPlans, Closure, !Plan):-
 	    poset.add(Add, Need, Order, O_1),
 	    verify_link_threat(NewLink, Actions, O_1, O_2),
 	    (if
-		member(Full_Add, Actions),
-		name(Full_Add) = Add
+		%if A is a new action
+		not (member(Full_Add, Actions), name(Full_Add) = Add)
 	    then
+		add_new_action(Need, Closure, Xs, Ag_New, {Actions, O_2, L_1}, NewPlan)
+	    else
+		%just plumbing
 		Xs = Ag_New,
 		NewPlan = {Actions, O_2, L_1}
-	    else
-		add_new_action(Need, Closure, Agenda, Ag_New, {Actions, O_2, L_1}, NewPlan)
-		
             ),
 	    
 		\+ member({Ag_New, NewPlan}, PastPlans),
 		set.insert({Ag_New, NewPlan}, PastPlans, NewRecord),
 		pop(Depth-1, Ag_New, NewRecord, Closure, NewPlan,!:Plan) 		
-	    else
+	    else %this is an optional assert and could be removed completely
 		(if % *all conjuncts of every action's precondition need to be supported by causal links*
 		    (member(A, Actions), member(Q, preconditions(A))) => member(causal_link(_, _, Q), Links) 
 		then
@@ -294,7 +296,7 @@ pop(Depth, Agenda, PastPlans, Closure, !Plan):-
 :- pred pop_wrap(list.list({pop.ground_literal, string}), {string, string}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}).
 :- mode pop_wrap(in, in, in, out) is nondet.
 pop_wrap(Agenda, Closure, !Plan):-
-    nondet_int_in_range(1, 12, Depth),
+    nondet_int_in_range(6, 12, Depth),
     pop(Depth, Agenda, set.init, Closure, !Plan).
 
 main(!IO):-
