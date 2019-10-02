@@ -52,13 +52,19 @@ bfs_path1(Q1, Solution, Arc, GoalEv):-
 
 
 bfs(S, Goal, Successor, GoalEv):-
-    queue.init(Q1),
-    queue.put_on_front([S], Q1, Q2),
-    bfs1(Q2, Goal, Successor, GoalEv).
+    (if
+	GoalEv(S)
+    then
+	Goal = S
+    else
+	queue.init(Q1),
+	queue.put_on_front([S], Q1, Q2),
+	bfs1(Q2, Goal, Successor, GoalEv)
+    ).
 
 
 :- pred bfs1(queue.queue(list.list(Node)), Node, pred(Node, Node), (pred Node)).
-:- mode bfs1(in, out, successor, goal). 
+:- mode bfs1(in, out, successor, goal) is nondet. 
 bfs1(Q1, Goal, Arc, GoalEv):-
     (if
 	queue.first(Q1, [S|_]),
@@ -67,7 +73,7 @@ bfs1(Q1, Goal, Arc, GoalEv):-
     then
 	Goal = G
     else
-	queue.get([S|Tail], Q1, Q2),
+	queue.get([S|Tail], Q1, Q2), %this part can fail if queue is empty
 	Lambda = (pred(X::out) is nondet :-
 	    Arc(S, Succ), \+ member(Succ, Tail),
 	    X = [Succ, S|Tail]

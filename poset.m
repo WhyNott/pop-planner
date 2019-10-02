@@ -1,13 +1,8 @@
-:- module pop.poset.
+:- module poset.
 %A naive implementation of a partially ordered set data structure.
 
 :- interface.
 
-
-:- include_module pop.poset.cycle_detector.
-
-
-:- import_module io.
 :- import_module set.
 :- import_module list.
 
@@ -50,8 +45,9 @@
 :- mode poset.to_total(in, out) is det.
 %:- mode poset.to_total(in, out) is cc_multi.
 
-
-
+%debug only
+:- pred poset.debug_to_list(poset(V), list({V, V})).
+:- mode poset.debug_to_list(in, out) is det.
 
 
 
@@ -59,11 +55,13 @@
 :- import_module list.
 :- import_module solutions.
 :- import_module maybe.
-:- import_module pop.poset.cycle_detector.
+:- import_module cycle_detector.
 
 :- type poset(V) == set({V, V}).
 
 
+debug_to_list(Poset, List):-
+    set.to_sorted_list(Poset, List).
 
 
 

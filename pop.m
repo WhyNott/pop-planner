@@ -1,40 +1,24 @@
 :- module pop.
 :- interface.
-:- import_module io.
-:- pred main(io::di, io::uo) is cc_multi.
-
-:- implementation.
+:- import_module logic.
 :- import_module list.
-:- import_module int.
 :- import_module set.
-:- import_module solutions.
-:- import_module maybe.
-:- include_module pop.poset.
-:- import_module pop.poset.
-:- import_module require.
+:- import_module poset.
 
-%Note: its stuck in (what feels like) an infinite loop now.
+:- type action_name == logic.name.
 
-:- type object
-         ---> a
-         ;      b
-	 ;      c    
-	 ;      table.    
-	     
-:- type ground_literal
-         ---> on(object, object)
-         ;      clear(object).
+:- type ground_literal == logic.disjunct.
 
-%once string comparison becomes too unbearable, change to discriminated union of all the names
-:- type action_name == string.
-
-:- type action 
-         ---> action(
-	     name :: action_name,
-	     preconditions :: list(ground_literal),
-	     add :: list(ground_literal),
-	     remove :: list(ground_literal)
-	 ).
+:- type action ---> action(
+    name :: action_name,
+    preconds :: list(disjunct),
+    effects_add :: list(disjunct),
+    effects_remove :: list(disjunct)
+).
+:- type operator ---> operator(
+    free_action :: action,
+    noncodesignants :: list({object, object}) %it means variables that shouldn't be the same thing
+).
 
 :- type causal_link
          ---> causal_link(
@@ -43,131 +27,103 @@
 	     proposition :: ground_literal
 	 ).
 
-	     
-	     
-:- type plan == {set(action), poset(action_name), set(causal_link)}.
+:- type plan ---> plan(
+    a :: set(action),
+    o :: poset(action_name),
+    l :: set(causal_link)
+).
+
 :- type agenda == list({ground_literal, action_name}).
 
 
 
-:- func actions = list.list(action).
-actions = [
-    action(%
-	"move-B-from-T-to-C",
-	[clear(c), on(b, table), clear(b)],
-	[on(b, c)],
-	[on(b, table), clear(c)]),
-     action(%
-	"move-A-from-T-to-B",
-	[on(a, table), clear(a), clear(b)],
-	[on(a, b)],
-	[on(a, table), clear(b)]),
-    action(
-    	"move-A-from-B-to-C",
-    	[on(a, b), clear(a), clear(c)],
-    	[on(a, c), clear(b)],
-    	[on(a, b), clear(c)]),
-    action(
-    	"move-A-from-C-to-B",
-    	[on(a, c), clear(a), clear(b)],
-    	[on(a, b), clear(c)],
-    	[on(a, c), clear(b)]),
-    action(
-    	"move-A-from-C-to-T",
-    	[on(a, c), clear(a)],
-    	[on(a, table), clear(c)],
-    	[on(a, c)]),
-    action(
-    	"move-A-from-B-to-T",
-    	[on(a, b), clear(a)],
-    	[on(a, table), clear(b)],
-    	[on(a, b)]),
-    action(
-    	"move-B-from-A-to-C",
-    	[on(b, a), clear(b), clear(c)],
-    	[on(b, c), clear(a)],
-    	[on(b, a), clear(c)]),
-    action(
-    	"move-B-from-C-to-A",
-    	[on(b, c), clear(b), clear(a)],
-    	[on(b, a), clear(c)],
-    	[on(b, c), clear(a)]),
-    action(
-    	"move-B-from-A-to-T",
-    	[on(b, a), clear(b)],
-    	[on(b, table), clear(a)],
-    	[on(b, a)]), %uncomment me for the slowdown
-    action(
-    	"move-B-from-C-to-T",
-    	[on(b, c), clear(b)],
-    	[on(b, table), clear(c)],
-    	[on(b, c)]),
-    action(
-    	"move-C-from-A-to-B",
-    	[on(c, a), clear(c), clear(b)],
-    	[on(c, b), clear(a)],
-    	[on(c, a), clear(b)]),
-    action(
-    	"move-C-from-B-to-A",
-    	[on(c, b), clear(c), clear(a)],
-    	[on(c, a), clear(b)],
-    	[on(c, b), clear(a)]),
-    action(
-    	"move-C-from-B-to-T",
-    	[on(c, b), clear(c)],
-    	[on(c, table), clear(b)],
-    	[on(c, b)]),
+:- pred pop(agenda, {action_name, action_name}, list(operator), list(object), plan, plan).
+:- mode pop(in, in, in, in, in, out) is nondet.
 
-    action(%
-	"move-C-from-A-to-T",
-	[on(c, a), clear(c)],
-	[on(c, table), clear(a)],
-	[on(c, a)]),
-    
-    
-    action(
-    	"move-A-from-T-to-C",
-    	[on(a, table), clear(a), clear(c)],
-    	[on(a, c)],
-    	[on(a, table), clear(c)]),
-    action(
-    	"move-B-from-T-to-A",
-    	[on(b, table), clear(b), clear(a)],
-    	[on(b, a)],
-    	[on(b, table), clear(a)]),
-    action(
-    	"move-C-from-T-to-A",
-    	[on(c, table), clear(c), clear(a)],
-    	[on(c, a)],
-    	[on(c, table), clear(a)]),
-    action(
-    	"move-C-from-T-to-B",
-    	[on(c, table), clear(c), clear(b)],
-    	[on(c, b)],
-    	[on(c, table), clear(b)])
-    ].
- 
 
-:- pred providers(pop.ground_literal, set(pop.action), list.list(pop.action), action_name).
-:- mode providers(in, in, in, out) is nondet.
-providers(Q, A, Domain, Result):-
+:- implementation.
+:- import_module bfs.
+:- import_module bool.
+:- import_module map.
+
+
+
+:- type node ---> node(plan :: plan, agenda :: agenda).
+
+%These node update predicates help make code more readable.
+%No more 'O_5', 'L_3', etc. State variables all the way.
+%I wish there was a more natural way to do this though.
+
+
+:- pred update_A(pop.action, pop.node, pop.node).
+:- mode update_A(in, in, out) is det.
+update_A(Value, OldNode, NewNode):-
+    OldNode = node(plan(A, O, L), Agenda),
+    NewNode = node(plan(set.insert(A, Value), O, L), Agenda).
+
+:- pred update_O(action_name, action_name, pop.node, pop.node).
+:- mode update_O(in, in, in, out) is det.
+update_O(Before, After, OldNode, NewNode):-
+    OldNode = node(plan(A, O, L), Agenda),
+    NewNode = node(plan(A, poset.add(Before, After, O), L), Agenda).
+
+:- pred update_L(pop.causal_link, pop.node, pop.node).
+:- mode update_L(in, in, out) is det.
+update_L(NewLink, OldNode, NewNode):-
+    OldNode = node(plan(A, O, L), Agenda),
+    NewNode = node(plan(A, O, set.insert(L, NewLink)), Agenda).
+
+%This one just takes a new agenda altogether.
+:- pred update_Agenda(agenda, pop.node, pop.node).
+:- mode update_Agenda(in, in, out) is det.
+update_Agenda(NewAgenda, OldNode, NewNode):-
+    OldNode = node(Plan, _),
+    NewNode = node(Plan, NewAgenda).
+
+
+%How to bind operators:
+%You need a specific term. You check if any of the terms in an operator's effects unifies with it. If one does, you check if the bindings are allowed. Then you pick (nondeterministically) values for the rest of the variables, again checking if the bindings are allowed for each one of them. Then you construct a ground action from the operator, and add it to the actions.  
+
+
+
+
+
+
+:- pred bind_operator(operator, list.list(object), action, logic.substitution).
+:- mode bind_operator(in, in, out, in) is nondet.
+bind_operator(Operator, Objects, Action, MGU_init):-
+    Lambda =
+	(pred(Var::in, MGUin::in, MGUout::out) is nondet :-
+	    member(X, Objects),
+	    logic.unify(Var, X, Operator^noncodesignants, MGUin, MGUout)
+	),
+	    Operator^free_action^name = name(Name, Vars),
+	    list.foldl(Lambda, Vars, MGU_init, MGU),
+	    Action = action(
+		name(Name, apply_sub_to_list(Vars, MGU)),
+		apply_sub_to_list(Operator^free_action^preconds, MGU),
+		apply_sub_to_list(Operator^free_action^effects_add, MGU),
+		apply_sub_to_list(Operator^free_action^effects_remove, MGU)
+	    ).
+%here is the problem - somebody cannot find on(b, c)!
+:- pred get_suitable_action(pop.ground_literal, set(pop.action), list(operator), list(object), action, bool).
+:- mode get_suitable_action(in, in, in, in, out, out) is nondet.
+get_suitable_action(Q, A, Domain, Objects, Result, IsFresh):-
     (if
 	member(Action, A),
-	member(Q, add(Action))
+	member(Q, Action^effects_add)
     then
-	Result = name(Action)
+	Result = Action,
+	IsFresh = no
     else
-	member(Action, Domain),
-	member(Q, add(Action)),
-	Result = name(Action)
+	%All the stuff related to grounding the operator will go here
+	member(Operator, Domain),
+	member(Term, Operator^free_action^effects_add),
+	unify(Term, Q, Operator^noncodesignants, sub_init, MGU),
+	bind_operator(Operator, Objects, Result, MGU),
+	IsFresh = yes
     ).
 
-:- pred establish_action_order(action_name, action_name, {action_name, action_name}, pop.poset.poset(action_name), pop.poset.poset(action_name)).
-:- mode establish_action_order(in, in, in, in, out) is det.
-establish_action_order(Add, Need, {FirstA, LastA}, !Order):-
-    poset.add(Add, Need, !Order),
-    poset.add(FirstA, Add, !Order),
-    poset.add(Add, LastA, !Order).
 	
 :- pred add_precond_to_agenda(action_name, list.list(ground_literal), list.list({ground_literal, action_name}), list.list({ground_literal, action_name})).
 :- mode add_precond_to_agenda(in, in, in, out) is det.
@@ -187,120 +143,105 @@ link_threathens(causal_link(A_p, A_c, Q), Order, Actions, A_t):-
     member(A_t, Actions),
     A_p \= A_t^name,
     A_c \= A_t^name,
-    member(Q, remove(A_t)), 
-    poset.orderable(A_p, name(A_t), Order),
-    poset.orderable(name(A_t), A_c, Order).
+    member(Q, A_t^effects_remove), 
+    poset.orderable(A_p, A_t^name, Order),
+    poset.orderable(A_t^name, A_c, Order).
 
 :- pred action_threathens(action, poset(action_name), set(causal_link), action_name, action_name).
 :- mode action_threathens(in, in, in, out, out) is nondet.
 action_threathens(A_t, Order, Links, A_p, A_c):-
-    member(Q, remove(A_t)),
+    member(Q, A_t^effects_remove),
     A_p \= A_t^name,
     A_c \= A_t^name,
     member(causal_link(A_p, A_c, Q), Links), 
-    poset.orderable(A_p, name(A_t), Order),
-    poset.orderable(name(A_t), A_c, Order).
+    poset.orderable(A_p, A_t^name, Order),
+    poset.orderable(A_t^name, A_c, Order).
 
-:- pred fix_constraint(action_name, action_name, action_name, pop.poset.poset(action_name), pop.poset.poset(action_name)).
+:- pred fix_constraint(action_name, action_name, action_name, node, node).
 :- mode fix_constraint(in, in, in, in, out) is nondet.
-fix_constraint(A_p, A_t, A_c, !Order):-
-    poset.orderable(A_t, A_p, !.Order),
-    poset.add(A_t, A_p, !Order)
+fix_constraint(A_p, A_t, A_c, !Node):-
+    poset.orderable(A_t, A_p, !.Node^plan^o),
+    update_O(A_t, A_p, !Node)
     ;
-    poset.orderable(A_c, A_t, !.Order),
-    poset.add(A_c, A_t, !Order).
+    poset.orderable(A_c, A_t, !.Node^plan^o),
+    update_O(A_c, A_t, !Node).
 
-:- pred verify_link_threat(pop.causal_link, set.set(pop.action), pop.poset.poset(string), pop.poset.poset(string)).
-:- mode verify_link_threat(in, in, in, out) is nondet.
-verify_link_threat(causal_link(Add, Need, Q), Actions, !Order ):-
+%neither of these two functions has great complexity
+%but I will worry about that later
+
+:- pred verify_link_threat(pop.causal_link, pop.node, pop.node).
+:- mode verify_link_threat(in,  in, out) is nondet.
+verify_link_threat(causal_link(Add, Need, Q), !Node ):-
     (if
-	link_threathens(causal_link(Add, Need, Q), !.Order, Actions, A_t)
-	then
-	    fix_constraint(Add, name(A_t), Need, !Order)
-	else
-	    !.Order = !:Order
-	).
-
-:- pred add_new_action(string, {string, string}, list.list({pop.ground_literal, string}), list.list({pop.ground_literal, string}), {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}).
-:- mode add_new_action(in, in, in, out, in, out) is nondet.
-
-add_new_action(Need, Closure, !Agenda, !Plan):-
-    !.Plan = {A_old, O_old, L},
-    !:Plan = {A_new, O_new, L},
-    member(Full_Add, actions), 
-    name(Full_Add) = Add, 
-    set.insert(Full_Add, A_old, A_new), 
-    %new action instance added to A
-    establish_action_order(Add, Need, Closure, O_old, O_mid),
-    add_precond_to_agenda(Add, preconditions(Full_Add), !.Agenda, !:Agenda),
-    (if
-	action_threathens(Full_Add, O_mid, L, A_p, A_c)
+	link_threathens(causal_link(Add, Need, Q), !.Node^plan^o, !.Node ^ plan ^ a, A_t)
     then
-	fix_constraint(A_p, Add, A_c, O_mid, O_new) 
+	fix_constraint(Add, name(A_t), Need, !Node),
+	verify_link_threat(causal_link(Add, Need, Q), !Node)
     else
-	O_new = O_mid
+	!.Node = !:Node
+    ).
+
+:- pred verify_action_threat(pop.action, pop.node, pop.node).
+:- mode verify_action_threat(in, in, out) is nondet.
+verify_action_threat(Action, !Node):-
+    (if
+	action_threathens(Action, !.Node^plan^o, !.Node^plan^l, A_p, A_c)
+    then
+	fix_constraint(A_p, Action^name, A_c, !Node),
+	verify_action_threat(Action, !Node)
+    else
+	!.Node = !:Node
     ).
 
 
 
-:- pred pop(int, agenda, set({agenda, plan}), {action_name, action_name}, plan, plan).
 
 
-%:- pragma minimal_model(pop/4).
 
 
-%There is an infinite loop in here, somewhere.
-%I have no clue as to what is causing it. I should get a break from this for a while.
-%After a break, I still don't know. But worry not, I shall find out.
-:- mode pop(in, in, in, in, in, out) is nondet.
-pop(Depth, Agenda, PastPlans, Closure, !Plan):-
-    (if
-	Depth > 0
-    then
-	!.Plan = {Actions, Order, Links},
+
+%Seach problem:
+%+ Node :: a tuple of the plan and an agenda
+%+ Goal :: node where the agenda is empty
+%+ successor function ::
+% Any arbitrary flaw is taken from agenda 
+%  A successor is such that an arbitrary action is chosen (either a newly instantiated one or a reused one from plan which can be ordered before). Out of the <A, O, L> and Agenda, the successor node:
+% + To L we add a causal link between the new action and the one from the flaw, over the predicate from the flaw.
+% + To O we add an ordering such that the new action in before the action from the flaw. In addition, if the action has been just freshly added (and not reused), we must also add that it is after the initial action and before the goal action.
+% + To A we add the new action, if it is fresh.
+% + From Agenda, we remove the flaw. If the new action is fresh, we add a new flaw for every predicate of its precondition.
+%In addition, for the successor to be viable, there must be no action threathening any of the causal links. In order to make sure this is the case, ordering contraints will need to be added into L at correct times. If consistent ordering contrains cannot be procured, then it is not a valid successor (and hence it will fail). 
+
+pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
+    bfs(node(!.Plan, Agenda), node(!:Plan, _), Successor, Goal),
+    Goal = (pred(Node::in) is semidet :- Node = node(_, [])),
+    Successor = (pred(!.Node::in, !:Node::out) is nondet :-
+
+	!.Node ^ agenda = [{Q, Need}|Xs], 
+	get_suitable_action(Q, (!.Node ^ plan ^ a), Operators, Objects, Action, IsFresh), %cf
+	NewLink = causal_link(Action^name, Need, Q),
+	verify_link_threat(NewLink, !Node), %cf
+	update_L(NewLink, !Node),
+	update_O(Action^name, Need, !Node),	
 	(if
-	    Agenda = [{Q, Need}|Xs]
+	    IsFresh = yes
 	then
-	    providers(Q, Actions, actions, Add),
-	    NewLink = causal_link(Add, Need, Q),
-	    set.insert(NewLink, Links, L_1), %L_New = L_1
-	    poset.orderable(Add, Need, Order),  
-	    poset.add(Add, Need, Order, O_1),
-	    verify_link_threat(NewLink, Actions, O_1, O_2),
-	    (if
-		%if A is a new action
-		not (member(Full_Add, Actions), name(Full_Add) = Add)
-	    then
-		add_new_action(Need, Closure, Xs, Ag_New, {Actions, O_2, L_1}, NewPlan)
-	    else
-		%just plumbing
-		Xs = Ag_New,
-		NewPlan = {Actions, O_2, L_1}
-            ),
-	    
-		\+ member({Ag_New, NewPlan}, PastPlans),
-		set.insert({Ag_New, NewPlan}, PastPlans, NewRecord),
-		pop(Depth-1, Ag_New, NewRecord, Closure, NewPlan,!:Plan) 		
-	    else %this is an optional assert and could be removed completely
-		(if % *all conjuncts of every action's precondition need to be supported by causal links*
-		    (member(A, Actions), member(Q, preconditions(A))) => member(causal_link(_, _, Q), Links) 
-		then
-		    !.Plan = !:Plan
-		else
-		    error("Something is up with the algorithm")
-		)
-	    )
+	    update_O(Initial, Action^name, !Node),
+	    update_O(Action^name, Final, !Node),
+	    verify_action_threat(Action, !Node), %cf
+	    update_A(Action, !Node),
+	    add_precond_to_agenda(Action^name,
+		Action^preconds,
+		Xs, NewAgenda),
+	    update_Agenda(NewAgenda, !Node)
 	else
-	    fail).
-
-:- pred pop_wrap(list.list({pop.ground_literal, string}), {string, string}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}, {set.set(pop.action), pop.poset.poset(string), set.set(pop.causal_link)}).
-:- mode pop_wrap(in, in, in, out) is nondet.
-pop_wrap(Agenda, Closure, !Plan):-
-    nondet_int_in_range(6, 12, Depth),
-    pop(Depth, Agenda, set.init, Closure, !Plan).
-
+	    update_Agenda(Xs, !Node)
+	)
+    ).
+ 
+/*
 main(!IO):-
-    NullAction = set.from_list([
+    
 	action(
 	    "initial-state",
 	    [],
@@ -313,14 +254,11 @@ main(!IO):-
 	    [])
 	]),
     poset.add("initial-state", "goal-state", poset.init, NullOrder),
-    NullPlan = {NullAction, NullOrder, set.init},
+    NullPlan = plan(NullAction, NullOrder, set.init),
     Closure = {"initial-state", "goal-state"},
     Agenda = [{on(b, c), "goal-state"}, {on(a, b), "goal-state"} ],
     (if
-	pop_wrap(Agenda, Closure, NullPlan, {_, OutOrder, _})
-	%poset.orderable("move-B-from-T-to-C", "move-A-from-T-to-C", OutOrder)
-	%only generates the correct answer once the constraint above constraints are added - suggests there is something wrong with my poset implementation
-	
+	pop(Agenda, Closure, NullPlan, plan(_, OutOrder, _))
     then
 	poset.to_total(OutOrder, OutPlan),
 	print(OutPlan, !IO),
@@ -331,4 +269,4 @@ main(!IO):-
 	write("No solution found.", !IO),
 	nl(!IO)
     ).
-	
+*/	
