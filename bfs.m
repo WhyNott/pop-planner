@@ -83,3 +83,4 @@ bfs1(Q1, Goal, Arc, GoalEv):-
 	bfs1(Q3, Goal, Arc, GoalEv)
     ).
 
+

@@ -105,12 +105,12 @@ bind_operator(Operator, Objects, Action, MGU_init):-
 		apply_sub_to_list(Operator^free_action^effects_add, MGU),
 		apply_sub_to_list(Operator^free_action^effects_remove, MGU)
 	    ).
-%here is the problem - somebody cannot find on(b, c)!
+%question: 
 :- pred get_suitable_action(pop.ground_literal, set(pop.action), list(operator), list(object), action, bool).
 :- mode get_suitable_action(in, in, in, in, out, out) is nondet.
 get_suitable_action(Q, A, Domain, Objects, Result, IsFresh):-
     (if
-	member(Action, A),
+	member(Action, A), 
 	member(Q, Action^effects_add)
     then
 	Result = Action,
@@ -215,14 +215,15 @@ verify_action_threat(Action, !Node):-
 pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
     bfs(node(!.Plan, Agenda), node(!:Plan, _), Successor, Goal),
     Goal = (pred(Node::in) is semidet :- Node = node(_, [])),
+    
     Successor = (pred(!.Node::in, !:Node::out) is nondet :-
-
-	!.Node ^ agenda = [{Q, Need}|Xs], 
+	!.Node ^ agenda = [{Q, Need}|Xs],
 	get_suitable_action(Q, (!.Node ^ plan ^ a), Operators, Objects, Action, IsFresh), %cf
 	NewLink = causal_link(Action^name, Need, Q),
 	verify_link_threat(NewLink, !Node), %cf
 	update_L(NewLink, !Node),
-	update_O(Action^name, Need, !Node),	
+	update_O(Action^name, Need, !Node),
+	
 	(if
 	    IsFresh = yes
 	then
@@ -235,10 +236,12 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
 		Xs, NewAgenda),
 	    update_Agenda(NewAgenda, !Node)
 	else
+	    poset.orderable(Action^name, Need, !.Node ^ plan ^ o), %cf
 	    update_Agenda(Xs, !Node)
 	)
     ).
- 
+
+
 /*
 main(!IO):-
     

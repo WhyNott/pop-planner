@@ -15,25 +15,20 @@
 :- mode unify(in, in, in, in, out) is semidet.
 
 
-:- type disjunct.
+:- type disjunct ---> disjunct(string, list(object)).
 :- instance unifiable(disjunct).
-:- func disjunct(string, list(object)) = disjunct.
-:- mode disjunct(in, in) = out is det.
-:- mode disjunct(out, out) = in is det.
 
-:- type name.
+
+:- type name ---> name(string, list(object)).
 :- instance unifiable(name).
-:- func name(string, list(object)) = name.
-:- mode name(in, in) = out is det.
-:- mode name(out, out) = in is det.
 
-:- type object.
+:- type var.
+
+:- type object ---> object(string);
+             variable(var).
 :- instance unifiable(object).
-:- func object(string) = object.
-:- mode object(in) = out is det.
-:- mode object(out) = in is det.
 
-
+%disjunct, name, object
 
 :- type substitution.
 :- func sub_init = logic.substitution.
@@ -63,52 +58,89 @@
 :- import_module term.
 :- import_module require.
 :- import_module map.
+:- import_module string.
 
 :- typeclass unifiable(D) where [
 func to_term(D) = term.term,
 func from_term(term.term) = D
 ].
 
-:- type disjunct ---> d(dt :: term).
+
+
+
 :- instance unifiable(disjunct) where [
 func(to_term/1) is dis_to_term,
 func(from_term/1) is dis_from_term
 ].
 :- func dis_to_term(disjunct) = term.
 :- mode dis_to_term(in) = out is det.
-dis_to_term(Dis) = Dis^dt.
+dis_to_term(disjunct(String, List)) = functor(atom(String), list.map(object_to_term,List), ct_disjunct).
 
 :- func dis_from_term(term) = disjunct.
 :- mode dis_from_term(in) = out is det.
-dis_from_term(Term) = d(Term).
+dis_from_term(Term) = disjunct(String, list.map(object_from_term, List)) :-
+    (if
+	Term = functor(atom(S), L, ct_disjunct)
+    then
+	String = S,
+	List = L
+    else
+	error("could not get a disjunct from a given term")
+    ).
 
 
-:- type name ---> n(nt :: term).
+
 :- instance unifiable(name) where [
 func(to_term/1) is name_to_term,
 func(from_term/1) is name_from_term
 ].
 :- func name_to_term(name) = term.
 :- mode name_to_term(in) = out is det.
-name_to_term(Name) = Name^nt.
+name_to_term(name(String, List)) = functor(atom(String), list.map(object_to_term,List), ct_name).
 
 :- func name_from_term(term) = name.
 :- mode name_from_term(in) = out is det.
-name_from_term(Term) = n(Term).
+name_from_term(Term) = name(String, list.map(object_from_term, List)) :-
+    (if
+	Term = functor(atom(S), L, ct_name)
+    then
+	String = S,
+	List = L
+    else
+	error("could not get a name from a given term")
+    ).
 
+:- type logic.var == term.var.
 
-:- type object ---> o(ot :: term).
 :- instance unifiable(object) where [
 func(to_term/1) is object_to_term,
 func(from_term/1) is object_from_term
 ].
 :- func object_to_term(object) = term.
 :- mode object_to_term(in) = out is det.
-object_to_term(Object) = Object^ot.
+object_to_term(Input) = Output :-
+	Input = object(String),
+	Output = functor(atom(String), [], ct_object)
+    ;
+	Input = variable(Var),
+	Output = variable(Var, ct_variable).
 
 :- func object_from_term(term) = object.
 :- mode object_from_term(in) = out is det.
-object_from_term(Term) = o(Term).
+object_from_term(Term) = Output :-
+    (if
+	Term = functor(atom(S), [], ct_object)
+    then
+	Output = object(S)
+    else
+	(if
+	    Term = variable(Var, ct_variable)
+	then
+	    Output = variable(Var)
+	else
+	    error(string.format("could not get an object from term %s", [s(string(Term))]))
+	)
+    ).
 
 
 :- type logic.substitution == term.substitution.
@@ -149,74 +181,6 @@ bindings_allowed(Noncodesignants, MGU):-
 apply_sub_to_list(Vars, MGU) = list.map(
     (func(X) = from_term(Y) :- apply_substitution(to_term(X), MGU, Y)), Vars). 
     
-
-%object_to_term_list(
-
-
-
-%I call this design pattern "pseudoconstructor".
-%Is it a pattern, or an anti-pattern?
-
-name(Name, Vars) = X :- name(Name, Vars,  X).
-
-:- pred name(string, list(object), name).
-:- mode name(in, in, out) is det.
-:- mode name(out, out, in) is det.
-:- pragma promise_equivalent_clauses(name/3).
-
-name(Name::in, Vars::in, X::out) :-
-    X = n(functor(atom(Name), list.map(object_to_term,Vars), ct_name)).
-
-name(Name::out, Vars::out, X::in) :-
-    (if
-	X = n(functor(atom(N), V, ct_name))
-    then
-	N = Name,
-	Vars = list.map(object_from_term, V)
-    else
-	error("attempted to unify name with a term that is not a name.")
-    ).
-
-
-object(Object) = X :- object(Object, X).
-
-:- pred object(string, object).
-:- mode object(in,  out) is det.
-:- mode object(out,  in) is det.
-:- pragma promise_equivalent_clauses(object/2).
-
-object(Object::in, X::out) :-
-    X = o(functor(atom(Object), [], ct_object)).
-
-object(Object::out,  X::in) :-
-    (if
-	X = o(functor(atom(N), [], ct_object))
-    then
-	N = Object
-    else
-	error("attempted to unify object with a term that is not an object.")
-    ).
-
-
-disjunct(Disjunct, Objs) = X :- disjunct(Disjunct, Objs,  X).
-
-:- pred disjunct(string, list(object), disjunct).
-:- mode disjunct(in, in, out) is det.
-:- mode disjunct(out, out, in) is det.
-:- pragma promise_equivalent_clauses(disjunct/3).
-
-disjunct(Disjunct::in, Objs::in, X::out) :-
-    X = d(functor(atom(Disjunct), list.map(object_to_term,Objs), ct_disjunct)).
-
-disjunct(Disjunct::out, Objs::out, X::in) :-
-    (if
-	X = d(functor(atom(N), V, ct_disjunct))
-    then
-	N = Disjunct,
-	Objs = list.map(object_from_term, V)
-    else
-	error("attempted to unify disjunct with a term that is not a disjunct.")
-    ).
 
 
 

@@ -93,7 +93,6 @@ extract_verts(Data, !Sets):-
     ).
 
 
-
 consistent(Poset):-
     extract_verts(set.to_sorted_list(Poset), set.init, Verts),
     cycle_detector.tarjan(set.to_sorted_list(Verts), set.to_sorted_list(Poset), no).
@@ -123,6 +122,7 @@ orderable_before(A, B, Poset):-
     \+ known_after(set.to_sorted_list(Poset), B, A).
 
 orderable(A, B, Poset):-
+    A \= B,
     add(A, B, Poset, PosetOut),
     consistent(PosetOut).
     %\+ known_after(set.to_sorted_list(Poset), B, A).
@@ -155,11 +155,14 @@ i_sort(Poset, List,Acc,Sorted):-
     (if
 	List = [H|T]
     then
-	insert(Poset, H,Acc,NAcc),i_sort(Poset, T,NAcc,Sorted)
+	insert(Poset, H,Acc,NAcc), i_sort(Poset, T,NAcc,Sorted)
     else
 	Acc = Sorted
     ).
-   
+
+
+
+
 :- pred insert(poset(V), V, list.list(V), list.list(V)).
 :- mode insert(in, in, in, out) is det.
 insert(Poset, X,Acc, Out):-
