@@ -19,8 +19,19 @@
 :- instance unifiable(disjunct).
 
 
-:- type name ---> name(string, list(object)).
+:- type repeat_flag ---> unique; repeated(int); repeated_top_copy(int).
+
+:- type name ---> name(string, list(object), repeat_flag).
+
+:- func repeat(logic.name) = logic.repeat_flag.
+
+%alternate construtor for when we don't care about the counter
+:- func name(string, list.list(logic.object)) = logic.name.
 :- instance unifiable(name).
+
+:- func name_decrement(logic.name) = logic.name is semidet. 
+:- func name_dethrone(logic.name) = logic.name.
+
 
 :- type var.
 
@@ -59,6 +70,7 @@
 :- import_module require.
 :- import_module map.
 :- import_module string.
+:- import_module int.
 
 :- typeclass unifiable(D) where [
 func to_term(D) = term.term,
@@ -66,6 +78,33 @@ func from_term(term.term) = D
 ].
 
 
+name(String, List) = name(String, List, unique).
+
+
+name_decrement(name(S, L, C)) = name(S, L, repeated_top_copy(C1)):-
+    (if
+	C = repeated_top_copy(C0)
+    then
+	C0 > 0,
+	C1 = (C0 - 1)
+    else
+	error("Attempted to increment a counter on a non-repeatable action")
+    ).
+
+
+
+name_dethrone(name(S, L, C)) = name(S, L, repeated(C1)):-
+    (if
+	C = repeated_top_copy(C0)
+    then
+	C1 = C0 
+    else
+	error("Attempted to dethrone an action that wasnt marked as a top copy!")
+    ).
+
+%returns just the repeat flag
+
+repeat(name(_, _, R)) = R.
 
 
 :- instance unifiable(disjunct) where [
@@ -96,7 +135,7 @@ func(from_term/1) is name_from_term
 ].
 :- func name_to_term(name) = term.
 :- mode name_to_term(in) = out is det.
-name_to_term(name(String, List)) = functor(atom(String), list.map(object_to_term,List), ct_name).
+name_to_term(name(String, List, _)) = functor(atom(String), list.map(object_to_term,List), ct_name).
 
 :- func name_from_term(term) = name.
 :- mode name_from_term(in) = out is det.

@@ -1,9 +1,10 @@
 :- module poset.
-%A naive implementation of a partially ordered set data structure.
+%An implementation of a partially ordered set data structure.
+%Prioritizes odereability checks over anything else.
 
 :- interface.
 
-:- import_module set.
+
 :- import_module list.
 
 :- type poset(V).
@@ -22,22 +23,13 @@
 :- pred poset.consistent(poset(V)::in) is semidet.
 
 
-% % A debug variant which outputs the cycle which lead to the poset being considered inconsistent
-
-:- import_module maybe.
-
-:- pred poset.consistent_debug(poset(V)::in, maybe(list(list(V)))::out) is det.
-
-
 % Determine is X can be consistently ordered before Y
 :- pred poset.orderable(V::in, V::in, poset(V)::in) is semidet.
 
 
-
-
-% Return the set of elements that can be ordered before X
-:- pred poset.before(V::in, poset(V)::in, set(V)::out) is det.
-:- func poset.before(V, poset(V)) = set(V) is det.
+% Return the list of elements that are definitely ordered before X
+:- pred poset.before(V::in, poset(V)::in, list(V)::out) is det.
+:- func poset.before(V, poset(V)) = list(V) is det.
 
 %Returns a totally ordered set (list) consistent with the poset
 
@@ -45,109 +37,136 @@
 :- mode poset.to_total(in, out) is det.
 %:- mode poset.to_total(in, out) is cc_multi.
 
-%debug only
-:- pred poset.debug_to_list(poset(V), list({V, V})).
-:- mode poset.debug_to_list(in, out) is det.
+
+
 
 
 
 :- implementation.
 :- import_module list.
-:- import_module solutions.
-:- import_module maybe.
-:- import_module cycle_detector.
 
-:- type poset(V) == set({V, V}).
+% For every vertex (in this case, action) we store a map where the keys are
+%all the elements that are preceeded by it (the value can be unit for example).
+%When we check if two elements can be ordered one before another, we check if
+% an opposite ordering exists and allow it if it doesnt.
 
+% Okay, now what to do when a new ordering X < Y is added? Well, we add X
+%to Y node's adjecency map, and then go thorugh all the verticies and if Y is
+%in their maps add X there as well (since if verticle Z > Y, then Z is 
+%also > X).
 
-debug_to_list(Poset, List):-
-    set.to_sorted_list(Poset, List).
+% I can implement sorting to total order quite similarly to how I am doing it
+%now. Lets assume that '<' in the sorting function means 'not provably >'.
 
+% Actually, I can have it choose nondeterministically to either accept it or
+%not. But I'm not sure if I actually need that.
 
+%I'm gonna use an ordinary map for now. I dont feel like messing around 
+%with setting up the hashing predicate, and it would ruin my beutiful type
+%abstraction. Honestly, mercury needs to have something in way of built-in
+%typeclass predicates for basic classes - something like getHash, toString in
+%OOP languages.
 
+:- import_module unit.
+:- import_module map.
+:- import_module set.
 
-init(set.init).
+% I need to change it, so that it also stores a set of all elements in the poset.
+:- type poset(V) ---> poset(elems::set(V), order::map(V, map(V, unit))).
 
+%ugh this will require tons of fixing
+%and some boilerplate functions
 
+:- pred map_insert(V, map(V, unit.unit), poset.poset(V), poset.poset(V)).
+:- mode map_insert(in, in, in, out) is det.
+poset.map_insert(Key, Value, poset(E, O), poset(E, ONew)) :-
+	map.set(Key, Value, O, ONew).
 
-init = set.init.
+:- pred set_insert(T, poset.poset(T), poset.poset(T)).
+:- mode set_insert(in, in, out) is det.
+poset.set_insert(Element, poset(E, O), poset(ENew, O)):-
+    set.insert(Element, E, ENew).
 
+:- pred map_values(pred(K, map(K, unit.unit), map(K, unit.unit)), poset.poset(K), poset.poset(K)).
+:- mode map_values(di(/* unique */(pred((ground >> ground), (ground >> ground), (free >> ground)) is det)), in, out) is det.
+poset.map_values(Pred, poset(E, O), poset(E, ONew)) :-
+    map.map_values(Pred, O, ONew).
 
-add(A, B, Poset, set.insert(Poset, {A, B})).
+poset.init(poset(set.init, map.init)).
+poset.init = poset(set.init, map.init).
 
-add(A, B, Poset) = set.insert(Poset, {A, B}).
-
-
-:- pred extract_verts(list({V, V}), set(V), set(V)).
-:- mode extract_verts(in, in, out) is det.
-
-extract_verts(Data, !Sets):-
+poset.add(A, B, !Poset):-
     (if
-	Data = [{A, B}|Xs]
+	map.search(!.Poset^order, B, Adj_t)
     then
-	set.insert(A, !Sets),
-	set.insert(B, !Sets),
-	extract_verts(Xs, !Sets)
+	map.set(A, unit, Adj_t, Adj_new),
+	map_insert(B, Adj_new, !Poset)
     else
-	!.Sets = !:Sets
+	map_insert(B, map.singleton(A, unit), !Poset),
+	set_insert(B, !Poset)
+    ),
+    set_insert(A, !Poset),
+	%That part here seems like there is some potential for optimisation
+	%Or maybe I'm wrong?
+    Transform = (pred(_::in, V::in, W::out) is det :-
+	(if
+	    map.contains(V, B)
+	then
+	    map.set(A, unit, V, W)
+	else
+	    V = W
+	)
+    ),
+    map_values(Transform, !Poset).
+
+poset.add(A, B, In) = Out :- poset.add(A, B, In, Out).
+
+
+%To check if the poset is consistent, you iterate through the vertices, and for
+%each one you verify that none of the elements that is supposed to be ordered
+%before it is also ordered after it for some reason. This is a slow method, but
+%I only ever use it in the testing suite anyway. 
+
+poset.consistent(Poset):-
+    CheckVertices = (pred(B::in, Adj::in, _::in, unit::out) is semidet :-
+	CheckAdjecency = (pred(A::in, _::in, _::in, unit::out) is semidet :-
+	    \+ poset.contains(B, A, Poset)),
+	map.foldl(CheckAdjecency, Adj, unit, _)),
+    map.foldl(CheckVertices, Poset^order, unit, _).
+
+
+:- pred contains(V, V, poset(V)).
+:- mode contains(in, in, in) is semidet.
+poset.contains(A, B, Poset):-
+    map.search(Poset^order, B, Adj),
+    map.contains(Adj, A).
+
+
+poset.orderable(A, B, Poset):-
+    \+ contains(B, A, Poset).
+    
+poset.before(A, Poset, List):-
+    (if
+	map.search(Poset^order, A, Adj)
+    then
+	map.keys(Adj, List)
+    else
+	List = []
     ).
 
-
-consistent(Poset):-
-    extract_verts(set.to_sorted_list(Poset), set.init, Verts),
-    cycle_detector.tarjan(set.to_sorted_list(Verts), set.to_sorted_list(Poset), no).
-
-consistent_debug(Poset, Output):-
-    extract_verts(set.to_sorted_list(Poset), set.init, Verts),
-    cycle_detector.tarjan(set.to_sorted_list(Verts), set.to_sorted_list(Poset), Output).
+poset.before(A, Poset) = List :- poset.before(A, Poset, List).
 
 
-:- pred known_after(list({V, V}), V, V).
-:- mode known_after(in, in, in) is semidet.
-:- mode known_after(in, in, out) is nondet.
 
-known_after(Data, X1, X2):-
-    (list.member({X1, X2}, Data)
-;
-    list.member({X1, Mid1}, Data),
-    list.member({Mid2, X2}, Data),
-    (Mid1 = Mid2; known_after(Data, Mid1, Mid2))).
-
-:- pred poset.orderable_before(V, V, poset(V)).
-:- mode poset.orderable_before(out, in, in) is nondet.
-
-orderable_before(A, B, Poset):-
-    extract_verts(set.to_sorted_list(Poset), set.init, Verts),
-    member(A, Verts),
-    \+ known_after(set.to_sorted_list(Poset), B, A).
-
-orderable(A, B, Poset):-
-    A \= B,
-    add(A, B, Poset, PosetOut),
-    consistent(PosetOut).
-    %\+ known_after(set.to_sorted_list(Poset), B, A).
+poset.to_total(Poset, OutList):-
+    i_sort(Poset, set.to_sorted_list(Poset^elems), [], OutList).
 
 
 
 
-before(X, Poset, Set):-
-    Lambda = (pred(A::out) is nondet:-
-	orderable_before(A, X, Poset), A \= X),
-    solutions_set(Lambda, Set).
+%Code stolen from http://kti.mff.cuni.cz/~bartak/prolog/sorting.html
+%It's just insertion sort
 
-before(X, Poset) = Set :- before(X, Poset, Set).
-
-
-to_total(Poset, OutList):-
-    extract_verts(set.to_sorted_list(Poset), set.init, Verts),
-    List = set.to_sorted_list(Verts),
-    i_sort(Poset, List,[], OutList).
-
-
-
-
-    %code stolen from http://kti.mff.cuni.cz/~bartak/prolog/sorting.html
-    
 :- pred i_sort(poset(V), list.list(V), list.list(V), list.list(V)).
 :- mode i_sort(in, in, in, out) is det.
 
