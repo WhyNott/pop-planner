@@ -78,6 +78,8 @@ sussman_operators(!VarSup) =
 
 % --------------------------- cargo transportation ----------------------------
 
+%'initial-state', 'Load'(c1, p1, sfo), 'Fly'(p1, sfo, jfk), 'Load'(c2, p2, jfk), 'Fly'(p2, jfk, sfo), 'Unload'(c1, p1, jfk), 'Unload'(c2, p2, sfo), 'goal-state'
+
 
 :- func at(logic.object, logic.object) = logic.disjunct.
 at(A, B) = disjunct("at", [A, B]).
@@ -285,14 +287,14 @@ gripper_operators(!VarSup) =
 	    []
 	),
 %move 2: electric bungaloo
-    % 	    operator(
-    % 		action(name("move2", [From, To]),
-    % 	    [room(From), room(To), at_robby(From)],
-    % 	    [at_robby(To)],
-    % 	    [at_robby(From)]
-    % 	),
-    % 	    []
-    % ),
+    	    operator(
+    		action(name("move2", [From, To]),
+    	    [room(From), room(To), at_robby(From)],
+    	    [at_robby(To)],
+    	    [at_robby(From)]
+    	),
+    	    []
+    ),
     operator(
 	action(name("pick", [Obj, Room, Gripper]),
 	    [ball(Obj), room(Room), gripper(Gripper)],
@@ -417,17 +419,44 @@ print_action(Action, !IO):-
 
 main(!IO):-
     VarSup = logic.init_var_supply,
-    %    sussman_operators(VarSup, _) = Domain,
+    %sussman_operators(VarSup, _) = Domain,
     %airport_operators(VarSup, _) = Domain,
     %tire_operators(VarSup, _) = Domain,
     gripper_operators(VarSup, _) = Domain,
     %robot_operators(VarSup, _) = Domain,
+    %Objects = [a, b, c, table],
     Objects = [room_a, room_b, ball1, ball2, ball3, ball4, left, right],
     %Objects = [c1, c2, sfo, jfk, p1, p2],
     %Objects = [robot1, robot2],
     InitialN = name("initial-state", []),
     GoalN = name("goal-state", []),
     NullAction = set.from_list([
+    % 	action(
+    % 	    InitialN,
+    % 	    [],
+    % 	    [at(c1, sfo), at(c2, jfk), at(p1, sfo), at(p2, jfk),
+    % 	    cargo(c1), cargo(c2), plane(p1), plane(p2),
+    % 	    airport(jfk), airport(sfo)],
+    % 	    []),
+    % 	action(
+    % 	    GoalN,
+    % 	    [at(c1, jfk), at(c2, sfo)],
+    % 	    [],
+    % 	    [])
+    % ]),
+
+% action(
+% 	    InitialN,
+% 	    [],
+% 	    [on(a, table), on(b, table), on(c, a), clear(b), clear(c)],
+% 	    []),
+% 	action(
+% 	    GoalN,
+% 	    [on(a, b), on(b, c)],
+% 	    [],
+% 	    [])
+%     ]),
+
 	action(
 	    InitialN,
 	    [],
@@ -441,12 +470,15 @@ main(!IO):-
 	    [at(ball1, room_b), at(ball2, room_b), at(ball3, room_b)],
 	    [],
 	    [])
-        ]),
+    ]),
 
     poset.add(InitialN, GoalN, poset.init, NullOrder),
     NullPlan = plan(NullAction, NullOrder, set.init),
     Closure = {InitialN, GoalN},
+    %Agenda = [{on(a, b), GoalN}, {on(b,c), GoalN}],
     Agenda = [{at(ball1, room_b), GoalN}, {at(ball2, room_b), GoalN}, {at(ball3, room_b), GoalN}],
+    %Agenda = [{at(c2, sfo), GoalN}, {at(c1, jfk), GoalN}],
+
     (if
 	pop(Agenda, Closure, Domain, Objects, NullPlan, plan(Actions, OutOrder, _)),
 	poset.consistent(OutOrder)

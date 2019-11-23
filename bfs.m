@@ -21,7 +21,9 @@
 :- import_module list.
 :- import_module queue.
 :- import_module solutions.
-
+:- import_module io.
+:- import_module int.
+:- import_module bool.
 
 bfs_path(S, Path, Successor, GoalEv):-
     queue.init(Q1),
@@ -62,6 +64,15 @@ bfs(S, Goal, Successor, GoalEv):-
 	bfs1(Q2, Goal, Successor, GoalEv)
     ).
 
+:- mutable(depth, int, 0, ground, [untrailed]).
+%Note: I need a backtracking-proof setup here. Right now its quite funny.
+%I like that mercury allows for these prolog-like tricks actually, if you need them.
+
+%The backtracking guard basically needs to be able to tell apart when a trace is refired due to recursion, and when its refired due to backtracking.
+
+%I eat my words, its trickier then I expected.
+
+%I will have to analize this later. I'm sure this is possible.
 
 :- pred bfs1(queue.queue(list.list(Node)), Node, pred(Node, Node), (pred Node)).
 :- mode bfs1(in, out, successor, goal) is nondet. 
@@ -71,6 +82,14 @@ bfs1(Q1, Goal, Arc, GoalEv):-
 	Arc(S, G),
 	GoalEv(G)
     then
+
+	%###
+	trace [io(!IO)] (
+		io.write_string("Goal located!", !IO), io.nl(!IO)
+
+	),
+	%###
+
 	Goal = G
     else
 	queue.get([S|Tail], Q1, Q2), %this part can fail if queue is empty
@@ -78,8 +97,34 @@ bfs1(Q1, Goal, Arc, GoalEv):-
 	    Arc(S, Succ), \+ member(Succ, Tail),
 	    X = [Succ, S|Tail]
 	),
-	solutions(Lambda, NewPaths),    
+	solutions(Lambda, NewPaths),
+
 	queue.put_list(NewPaths, Q2, Q3),
+
+	%###    
+	trace [io(!IO), state(depth, !Depth)] (
+	    NewNodes = list.length(NewPaths):int,
+	    io.write(NewNodes, !IO),
+	    io.write_string(" new paths found", !IO),
+	    io.nl(!IO),
+	    io.write_string("Total: ", !IO),
+	    io.write(queue.length(Q3):int, !IO),
+	    io.write_string(" nodes on level ", !IO),
+	    io.write(!.Depth, !IO),
+	    io.nl(!IO),
+
+	    (if
+		NewNodes = 0
+	    then
+		!:Depth = !.Depth
+	    else
+		!:Depth = !.Depth + 1
+	    )
+	),
+	%###
+	    
+	    
+
 	bfs1(Q3, Goal, Arc, GoalEv)
     ).
 

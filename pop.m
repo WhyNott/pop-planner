@@ -4,7 +4,7 @@
 :- import_module list.
 :- import_module set.
 :- import_module poset.
-:- import_module solutions.
+
 
 
 :- type action_name == logic.name.
@@ -51,6 +51,9 @@
 :- import_module int.
 :- import_module require.
 :- import_module maybe.
+:- import_module io.
+
+
 :- type node ---> node(plan :: plan, agenda :: agenda).
 
 %These node update predicates help make code more readable.
@@ -268,32 +271,45 @@ verify_action_threat(Action, !Node):-
 % + From Agenda, we remove the flaw. If the new action is fresh, we add a new flaw for every predicate of its precondition.
 %In addition, for the successor to be viable, there must be no action threathening any of the causal links. In order to make sure this is the case, ordering contraints will need to be added into L at correct times. If consistent ordering contrains cannot be procured, then it is not a valid successor (and hence it will fail).
 
-:- pred flaw_selection(list.list({logic.disjunct, action_name}), logic.disjunct, set.set(pop.action), list.list(pop.operator), list.list(logic.object), pop.action, bool.bool, action_name, maybe.maybe(set.set(pop.action))).
-:- mode flaw_selection(in, out, in, in, in, out, out, out, out) is nondet.
-flaw_selection(Agenda, Q, A, Domain, Objects, Result, IsFresh, Need, AOut):-
+
+
+
+:- pred flaw_selection(list.list({logic.disjunct, action_name}),  set.set(pop.action), list.list(pop.operator), list.list(logic.object), logic.disjunct, pop.action, bool.bool, action_name, maybe.maybe(set.set(pop.action))).
+:- mode flaw_selection(in, in, in, in, out, out, out, out, out) is nondet.
+flaw_selection(Agenda,  A, Domain, Objects, Q, Result, IsFresh, Need, AOut):-
     
-    Maximum = 10000000000000, %Does mercury has a way to get the highest possible integer value?
-    list.foldl(Fold, Agenda, {Maximum, set.init}, {_, SelectedFlaw}),
-    member({Q, AOut, Result, IsFresh, Need}, SelectedFlaw),
+    Maximum = 10000000000000, %Does mercury have a way to get the highest possible integer value?
+ 
    
     Fold = (pred({Q_n, Ne}::in, {Num_old, Set_old}::in, New::out) is det:-
-	Lambda = (pred({Q_n1, AO, Res, IsF, Ne1}::out) is det:-
+	Lambda = (pred({Q_n1, AO, Res, IsF, Ne1}::out) is nondet:-
 	    Q_n= Q_n1,
 	    Ne1 = Ne,
 	    get_suitable_action(Q_n, A, AO, Domain, Objects, Res, IsF)),
 	solutions_set(Lambda, Set),
-	Count = set.count(Set), 
+	Count = set.count(Set),
 	(if
-	    Count < Num_old
+	    Count < Num_old,
+	    Count > 0
 	then
 	    New = {Count, Set}
 	else
 	    New = {Num_old, Set_old}
 	)
-    ).	    
+    ),
+
+	    list.foldl(Fold, Agenda, {Maximum, set.init}, {Countie, SelectedFlaw}),
+%	    trace [io(!IO)] (io.write(Countie, !IO), io.nl(!IO)),
+	    member({Q, AOut, Result, IsFresh, Need}, SelectedFlaw).	    
 
 
+	  
+%Okay, since I'm on a newer version of mercury now, with all these cool brand new compiler grades, maybe trailing works now. My unfortunate current predicament would be a nice test of this, actually! Lets inset printouts from time to time, and get it sorted out.
 
+%So, its not working for the gripper problem for some reason.
+%Turns out, it finds all these possible actions for depth 0 just fine. But when it comes to finding any further, it just doesn't, it finds 0.
+
+%Hmm, I need to think about this. Still, its pretty good I now have this diagnostic system!
 
 
 pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
@@ -301,8 +317,15 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
     Goal = (pred(Node::in) is semidet :- Node = node(_, [])),
     
     Successor = (pred(!.Node::in, !:Node::out) is nondet :-
-	flaw_selection(!.Node ^ agenda, Q, (!.Node ^ plan ^ a), Operators, Objects, Action, IsFresh, Need, AOut),
-	list.delete_first(Agenda, {Q, Need}, Xs), 	
+	flaw_selection(!.Node ^ agenda, (!.Node ^ plan ^ a), Operators, Objects, Q, Action, IsFresh, Need, AOut),
+	%trace [io(!IO)] (io.write(Action^name, !IO), io.nl(!IO)),
+	(if 
+	    list.delete_first(!.Node ^ agenda, {Q, Need}, Xso)
+	then
+	    Xso=Xs
+	else
+	    error("this shouldn't happen")
+	),
 	%	!.Node ^ agenda = [{Q, Need}|Xs], 
 %	get_suitable_action(Q, (!.Node ^ plan ^ a), AOut, Operators, Objects, Action, IsFresh), %cf
 	(if
@@ -331,7 +354,11 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
 	else
 	    poset.orderable(Action^name, Need, !.Node ^ plan ^ o), %cf
 	    update_Agenda(Xs, !Node)
-	)
+	),
+	    %remove this trace once you think you can get a result
+	    trace [io(!IO)] (
+		poset.to_total(!.Node ^ plan ^ o, Total),
+		io.write(Total, !IO), io.nl(!IO))
     ).
 
 

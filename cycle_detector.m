@@ -100,7 +100,7 @@ get_index(Output, {Output, _, _, _}).
 
 %%%%%%%%%%%%%%%%%%%%
 
-:-pred update_vertex_index(int, V, state(V), state(V)) is det.
+:-pred update_vertex_index(int, V, state(V), state(V)).
 :-mode update_vertex_index(in, in, in, out) is det.
 
 update_vertex_index(NewIndex, Vertice, !State):-
@@ -219,7 +219,7 @@ stack_pop(Out, !State):-
 
 %%%%%%%%%%%%%%%%%%%%
 
-:- pred add_to_output(list(V), state(V), state(V)) is det.
+:- pred add_to_output(list(V), state(V), state(V)). 
 :- mode add_to_output(in, in, out) is det.
 
 add_to_output(Component, !State):-
@@ -397,7 +397,7 @@ strongconnect(Edges, Vertex, !State):-
 
 
 
-:- pred tarjan_body(list({V, V}), V, state(V), state(V)) is det.
+:- pred tarjan_body(list({V, V}), V, state(V), state(V)).
 :- mode tarjan_body(in, in, in, out) is det.
 
 tarjan_body(Edges, Vertex, !State) :-
