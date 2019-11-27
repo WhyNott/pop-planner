@@ -12,6 +12,8 @@
 :- import_module poset.
 :- import_module logic.
 
+:- import_module planner_data_structures.
+
 %In case I ever loose bash history:
 
 %mmc --grade asm_fast.gc.decldebug.stseg --intermod-opt --make tests
@@ -21,6 +23,11 @@
 %mmc --grade asm_fast.gc.prof.stseg --intermod-opt --make tests
 %
 
+%so the gripper scenario is failing again.
+%who knows, maybe if I fix it, it will actually solve in half-decent time?
+    %good joke.
+%also, the two robots problem has an action after goal-state. That should not be possible, so something must be wrong.
+%(it even gives an action at the end that shouldn't be there)
 % ------------------------ sussmann anomaly ----------------------------
 
 
@@ -38,7 +45,7 @@ c = object("c").
 table = object("table").
 
 
-    
+
 :- func sussman_operators(logic.var_supply, logic.var_supply) = list.list(operator).
 :- mode sussman_operators(in, out) = out is det.
 sussman_operators(!VarSup) =
@@ -64,18 +71,14 @@ sussman_operators(!VarSup) =
     create_wrap_var(A, !VarSup),
     create_wrap_var(Z, !VarSup).
 
-% action(
-	%     InitialN,
-	%     [],
-	%     [on(a, table), on(b, table), on(c, a), clear(b), clear(c)],
-	%     []),
-	% action(
-	%     GoalN,
-	%     [on(a, b), on(b, c)],
-	%     [],
-	%     [])
-    % ]),
-
+:- func sussmann_domain = planner_data_structures.domain.
+sussmann_domain = domain(
+    sussman_operators(logic.init_var_supply, _),
+    [a, b, c, table],
+    [on(a, table), on(b, table), on(c, a), clear(b), clear(c)],
+    [on(a, b), on(b, c)]
+).
+  
 % --------------------------- cargo transportation ----------------------------
 
 %'initial-state', 'Load'(c1, p1, sfo), 'Fly'(p1, sfo, jfk), 'Load'(c2, p2, jfk), 'Fly'(p2, jfk, sfo), 'Unload'(c1, p1, jfk), 'Unload'(c2, p2, sfo), 'goal-state'
@@ -146,21 +149,15 @@ airport_operators(!VarSup) =
     create_wrap_var(From, !VarSup),
     create_wrap_var(To, !VarSup).
 
-	
-	% action(
-	%     InitialN,
-	%     [],
-	%     [at(c1, sfo), at(c2, jfk), at(p1, sfo), at(p2, jfk),
-	%     cargo(c1), cargo(c2), plane(p1), plane(p2),
-	%     airport(jfk), airport(sfo)],
-	%     []),
-	% action(
-	%     GoalN,
-	%     [at(c1, jfk), at(c2, sfo)],
-	%     [],
-	%     [])
-	% ])
-%Objects = [c1, c2, sfo, jfk, p1, p2],
+:- func airport_domain = planner_data_structures.domain.
+airport_domain = domain(
+    airport_operators(logic.init_var_supply, _),
+    [c1, c2, sfo, jfk, p1, p2],
+    [at(c1, sfo), at(c2, jfk), at(p1, sfo), at(p2, jfk),
+    cargo(c1), cargo(c2), plane(p1), plane(p2),
+    airport(jfk), airport(sfo)],
+    [at(c1, jfk), at(c2, sfo)]
+).
 
 %--------------- spare tire problem --------------
 
@@ -217,17 +214,15 @@ tire_operators(!VarSup) =
    create_wrap_var(Axle, !VarSup),
    create_wrap_var(NotAxle, !VarSup).
 
-% action(
-% 	    InitialN,
-% 	    [],
-% 	    [tire(flat), tire(spare), at(flat, axle), at(spare, trunk)],
-% 	    []),
-% 	action(
-% 	    GoalN,
-% 	    [at(spare, axle)],
-% 	    [],
-% 	    [])
-	
+:- func tire_domain = planner_data_structures.domain.
+tire_domain = domain(
+    tire_operators(logic.init_var_supply, _),
+    [flat, spare, axle, trunk, floor],
+    [tire(flat), tire(spare), at(flat, axle), at(spare, trunk)],
+    [at(spare, axle)]
+).
+
+
 %--------------- gripper problem --------------
 
 % Plan:
@@ -250,7 +245,6 @@ ball(B) = disjunct("ball", [B]).
 gripper(G) = disjunct("gripper", [G]).
 :- func at_robby(logic.object) = logic.disjunct.
 at_robby(R) = disjunct("at_robby", [R]).
-% at(A, B) is already defined
 :- func freee(logic.object) = logic.disjunct.
 freee(G) = disjunct("free", [G]).
 :- func carry(logic.object, logic.object) = logic.disjunct. 
@@ -321,6 +315,16 @@ gripper_operators(!VarSup) =
    create_wrap_var(Gripper2, !VarSup).
 
 
+:- func gripper_domain = planner_data_structures.domain.
+gripper_domain = domain(
+    gripper_operators(logic.init_var_supply, _),
+    [room_a, room_b, ball1, ball2, ball3, ball4, left, right],
+    [room(room_a), room(room_b), ball(ball1), ball(ball2),
+    ball(ball3), ball(ball4), gripper(left), gripper(right),
+    at_robby(room_a), at(ball2, room_a),
+    at(ball3, room_a), at(ball4, room_a)],
+    [at(ball1, room_b), at(ball2, room_b), at(ball3, room_b)]
+).
 
 
 
@@ -367,30 +371,16 @@ robot_operators(!VarSup) =
 		    ]:-
 			create_wrap_var(Robot, !VarSup).
 
-
-	% action(
-	%     InitialN,
-	%     [],
-	%     [outside(robot1), outside(robot2), door_closed],
-	%     []),
-	% action(
-	%     GoalN,
-	%     [inside(robot1), inside(robot2)],
-	%     [],
-	%     [])
-        % ]),
-
-
-
-
-
-
-%I'm scared.
-
-
+:- func robot_domain = planner_data_structures.domain.
+robot_domain = domain(
+    robot_operators(logic.init_var_supply, _),
+    [robot1, robot2],
+    [outside(robot1), outside(robot2), door_closed],
+    [inside(robot1), inside(robot2)]
+).
 
 	
-:- pred print_action(pop.action, io.state, io.state).
+:- pred print_action(action, io.state, io.state).
 :- mode print_action(in, di, uo) is det.
 print_action(Action, !IO):-
     io.nl(!IO),
@@ -415,72 +405,33 @@ print_action(Action, !IO):-
 %TODO: implement a predicate that verifies that a plan is correct, by applying all the actions step by step and seeing if one arrives at the goal.
 %(Seems like a liberal application of fold should be sufficient)
 
-
-
-main(!IO):-
-    VarSup = logic.init_var_supply,
-    %sussman_operators(VarSup, _) = Domain,
-    %airport_operators(VarSup, _) = Domain,
-    %tire_operators(VarSup, _) = Domain,
-    gripper_operators(VarSup, _) = Domain,
-    %robot_operators(VarSup, _) = Domain,
-    %Objects = [a, b, c, table],
-    Objects = [room_a, room_b, ball1, ball2, ball3, ball4, left, right],
-    %Objects = [c1, c2, sfo, jfk, p1, p2],
-    %Objects = [robot1, robot2],
-    InitialN = name("initial-state", []),
-    GoalN = name("goal-state", []),
-    NullAction = set.from_list([
-    % 	action(
-    % 	    InitialN,
-    % 	    [],
-    % 	    [at(c1, sfo), at(c2, jfk), at(p1, sfo), at(p2, jfk),
-    % 	    cargo(c1), cargo(c2), plane(p1), plane(p2),
-    % 	    airport(jfk), airport(sfo)],
-    % 	    []),
-    % 	action(
-    % 	    GoalN,
-    % 	    [at(c1, jfk), at(c2, sfo)],
-    % 	    [],
-    % 	    [])
-    % ]),
-
-% action(
-% 	    InitialN,
-% 	    [],
-% 	    [on(a, table), on(b, table), on(c, a), clear(b), clear(c)],
-% 	    []),
-% 	action(
-% 	    GoalN,
-% 	    [on(a, b), on(b, c)],
-% 	    [],
-% 	    [])
-%     ]),
-
+:- func create_null_plan(planner_data_structures.domain) = pop.plan.
+create_null_plan(Domain) = plan(
+    set.from_list([
 	action(
-	    InitialN,
+	    name("initial-state", []),
 	    [],
-	    [room(room_a), room(room_b), ball(ball1), ball(ball2),
-	    ball(ball3), ball(ball4), gripper(left), gripper(right),
-	    at_robby(room_a), at(ball2, room_a),
-	    at(ball3, room_a), at(ball4, room_a)],
+	    Domain ^ initial,
 	    []),
 	action(
-	    GoalN,
-	    [at(ball1, room_b), at(ball2, room_b), at(ball3, room_b)],
+	    name("goal-state", []),	    
+	    Domain ^ goal,
 	    [],
 	    [])
-    ]),
+	]),
+    poset.add(name("initial-state", []), name("goal-state", []), poset.init),
+    set.init).
 
-    poset.add(InitialN, GoalN, poset.init, NullOrder),
-    NullPlan = plan(NullAction, NullOrder, set.init),
-    Closure = {InitialN, GoalN},
-    %Agenda = [{on(a, b), GoalN}, {on(b,c), GoalN}],
-    Agenda = [{at(ball1, room_b), GoalN}, {at(ball2, room_b), GoalN}, {at(ball3, room_b), GoalN}],
-    %Agenda = [{at(c2, sfo), GoalN}, {at(c1, jfk), GoalN}],
+:- func create_agenda(domain) = list.list({logic.disjunct, logic.name}).
+create_agenda(Domain) = list.map(Lambda, Domain^goal) :-
+    Lambda = (func(Dis) = {Dis, name("goal-state", [])}).
+    
 
+main(!IO):-
+    Domain = robot_domain,
+    Closure = {name("initial-state", []), name("goal-state", [])},
     (if
-	pop(Agenda, Closure, Domain, Objects, NullPlan, plan(Actions, OutOrder, _)),
+	pop(create_agenda(Domain), Closure, Domain^operators, Domain^objects, create_null_plan(Domain), plan(Actions, OutOrder, _)),
 	poset.consistent(OutOrder)
 	
     then

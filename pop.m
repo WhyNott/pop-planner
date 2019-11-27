@@ -4,23 +4,7 @@
 :- import_module list.
 :- import_module set.
 :- import_module poset.
-
-
-
-:- type action_name == logic.name.
-
-:- type ground_literal == logic.disjunct.
-
-:- type action ---> action(
-    name :: action_name,
-    preconds :: list(disjunct),
-    effects_add :: list(disjunct),
-    effects_remove :: list(disjunct)
-).
-:- type operator ---> operator(
-    free_action :: action,
-    noncodesignants :: list({object, object}) %it means variables that shouldn't be the same thing
-).
+:- import_module planner_data_structures.
 
 :- type causal_link
          ---> causal_link(
@@ -36,7 +20,6 @@
 ).
 
 :- type agenda == list({ground_literal, action_name}).
-
 
 
 :- pred pop(agenda, {action_name, action_name}, list(operator), list(object), plan, plan).
@@ -61,33 +44,33 @@
 %I wish there was a more natural way to do this though.
 
 
-:- pred update_A(pop.action, pop.node, pop.node).
+:- pred update_A(action, node, node).
 :- mode update_A(in, in, out) is det.
 update_A(Value, OldNode, NewNode):-
     OldNode = node(plan(A, O, L), Agenda),
     NewNode = node(plan(set.insert(A, Value), O, L), Agenda).
 
-:- pred replace_A(set(pop.action), pop.node, pop.node).
+:- pred replace_A(set(action), node, node).
 :- mode replace_A(in, in, out).
 replace_A(NewA, OldNode, NewNode):-
     OldNode = node(plan(_, O, L), Agenda),
     NewNode = node(plan(NewA, O, L), Agenda).
 
 
-:- pred update_O(action_name, action_name, pop.node, pop.node).
+:- pred update_O(action_name, action_name, node, node).
 :- mode update_O(in, in, in, out) is det.
 update_O(Before, After, OldNode, NewNode):-
     OldNode = node(plan(A, O, L), Agenda),
     NewNode = node(plan(A, poset.add(Before, After, O), L), Agenda).
 
-:- pred update_L(pop.causal_link, pop.node, pop.node).
+:- pred update_L(causal_link, node, node).
 :- mode update_L(in, in, out) is det.
 update_L(NewLink, OldNode, NewNode):-
     OldNode = node(plan(A, O, L), Agenda),
     NewNode = node(plan(A, O, set.insert(L, NewLink)), Agenda).
 
 %This one just takes a new agenda altogether.
-:- pred update_Agenda(agenda, pop.node, pop.node).
+:- pred update_Agenda(agenda, node, node).
 :- mode update_Agenda(in, in, out) is det.
 update_Agenda(NewAgenda, OldNode, NewNode):-
     OldNode = node(Plan, _),
@@ -96,11 +79,11 @@ update_Agenda(NewAgenda, OldNode, NewNode):-
 %method to increment a name counter of an action
 %useful for when we have more then 1 same action in our plan
 
-:- func action_decrement(pop.action) = pop.action is semidet.
+:- func action_decrement(action) = action is semidet.
 action_decrement(action(N, P, Ea, Er)) =
 	action(name_decrement(N), P, Ea, Er).
 
-:- func action_dethrone(pop.action) = pop.action.
+:- func action_dethrone(action) = action.
 action_dethrone(action(N, P, Ea, Er)) =
 	action(name_dethrone(N), P, Ea, Er).
 
@@ -150,7 +133,7 @@ bind_operator(Operator, Objects, Action, MGU_init):-
 %'newest' flag set)
 
 
-:- pred get_suitable_action(pop.ground_literal, set(pop.action), maybe(set(pop.action)), list(operator), list(object), action, bool).
+:- pred get_suitable_action(ground_literal, set(action), maybe(set(action)), list(operator), list(object), action, bool).
 :- mode get_suitable_action(in, in, out, in, in, out, out) is nondet.
 get_suitable_action(Q, A, AOut, Domain, Objects, Result, IsFresh):-
 
@@ -198,7 +181,7 @@ add_precond_to_agenda(Action, Precond, !Agenda):-
 	!:Agenda = !.Agenda
     ).
 
-:- pred link_threathens(pop.causal_link, poset(action_name), set(pop.action), pop.action).
+:- pred link_threathens(causal_link, poset(action_name), set(action), action).
 :- mode link_threathens(in, in, in, out) is nondet.
 link_threathens(causal_link(A_p, A_c, Q), Order, Actions, A_t):-
     member(A_t, Actions),
@@ -230,7 +213,7 @@ fix_constraint(A_p, A_t, A_c, !Node):-
 %neither of these two functions has great complexity
 %but I will worry about that later
 
-:- pred verify_link_threat(pop.causal_link, pop.node, pop.node).
+:- pred verify_link_threat(causal_link, node, node).
 :- mode verify_link_threat(in,  in, out) is nondet.
 verify_link_threat(causal_link(Add, Need, Q), !Node ):-
     (if
@@ -242,7 +225,7 @@ verify_link_threat(causal_link(Add, Need, Q), !Node ):-
 	!.Node = !:Node
     ).
 
-:- pred verify_action_threat(pop.action, pop.node, pop.node).
+:- pred verify_action_threat(action, node, node).
 :- mode verify_action_threat(in, in, out) is nondet.
 verify_action_threat(Action, !Node):-
     (if
@@ -274,23 +257,23 @@ verify_action_threat(Action, !Node):-
 
 
 
-:- pred flaw_selection(list.list({logic.disjunct, action_name}),  set.set(pop.action), list.list(pop.operator), list.list(logic.object), logic.disjunct, pop.action, bool.bool, action_name, maybe.maybe(set.set(pop.action))).
+:- pred flaw_selection(list.list({logic.disjunct, action_name}),  set.set(action), list.list(operator), list.list(logic.object), logic.disjunct, action, bool.bool, action_name, maybe.maybe(set.set(action))).
 :- mode flaw_selection(in, in, in, in, out, out, out, out, out) is nondet.
 flaw_selection(Agenda,  A, Domain, Objects, Q, Result, IsFresh, Need, AOut):-
     
     Maximum = 10000000000000, %Does mercury have a way to get the highest possible integer value?
  
    
-    Fold = (pred({Q_n, Ne}::in, {Num_old, Set_old}::in, New::out) is det:-
+    Fold = (pred({Q_n, Ne}::in, {Num_old, Set_old}::in, New::out) is semidet:-
 	Lambda = (pred({Q_n1, AO, Res, IsF, Ne1}::out) is nondet:-
 	    Q_n= Q_n1,
 	    Ne1 = Ne,
 	    get_suitable_action(Q_n, A, AO, Domain, Objects, Res, IsF)),
 	solutions_set(Lambda, Set),
 	Count = set.count(Set),
+	Count \= 0, %if there is a flaw that cannot be refined, there is no hope
 	(if
-	    Count < Num_old,
-	    Count > 0
+	    Count < Num_old
 	then
 	    New = {Count, Set}
 	else
