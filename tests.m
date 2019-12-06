@@ -11,6 +11,8 @@
 :- import_module set.
 :- import_module poset.
 :- import_module logic.
+:- import_module require.
+
 
 :- import_module planner_data_structures.
 
@@ -26,8 +28,11 @@
 %so the gripper scenario is failing again.
 %who knows, maybe if I fix it, it will actually solve in half-decent time?
     %good joke.
-%also, the two robots problem has an action after goal-state. That should not be possible, so something must be wrong.
-%(it even gives an action at the end that shouldn't be there)
+
+%riight, so why is the robots scenario failing?
+
+%I have a sneaking suspicion that whatever is causing the gripper scenario to fail, is the exact same reason for why the robot scenario doesn't either.
+
 % ------------------------ sussmann anomaly ----------------------------
 
 
@@ -291,9 +296,10 @@ gripper_operators(!VarSup) =
     ),
     operator(
 	action(name("pick", [Obj, Room, Gripper]),
-	    [ball(Obj), room(Room), gripper(Gripper)],
-	    [at(Obj, Gripper)],
-	    [at(Obj, Room)]
+	    [ball(Obj), room(Room), gripper(Gripper),
+	    at(Obj, Room), at_robby(Room), freee(Gripper)],
+	    [carry(Obj, Gripper)],
+	    [at(Obj, Room), freee(Gripper)]
 	),
 	    []
    ),
@@ -356,7 +362,13 @@ robot2 = object("robot2").
 robot_operators(!VarSup) =
     [
     operator(
-	action(name("open_door", [], repeated_top_copy(2)),
+	action(name("open_door", []),
+	    [door_closed],
+	    [door_open],
+	    [door_closed]
+	), [] ),
+	    operator(
+	action(name("open_door2", []),
 	    [door_closed],
 	    [door_open],
 	    [door_closed]
@@ -425,10 +437,18 @@ create_null_plan(Domain) = plan(
 :- func create_agenda(domain) = list.list({logic.disjunct, logic.name}).
 create_agenda(Domain) = list.map(Lambda, Domain^goal) :-
     Lambda = (func(Dis) = {Dis, name("goal-state", [])}).
-    
 
-main(!IO):-
-    Domain = robot_domain,
+
+%I need to create a predicate that:
+%1. Starts with the initial state
+%2. Goes through the totally ordered plan, and for each action inside, applies
+%the action's add and remove lists to the state
+%3. After the list is finished, verifies that the goal is a subset of the final state.
+
+
+:- pred test_domain(planner_data_structures.domain, io.state, io.state).
+:- mode test_domain(in, di, uo) is cc_multi.
+test_domain(Domain, !IO):- 
     Closure = {name("initial-state", []), name("goal-state", [])},
     (if
 	pop(create_agenda(Domain), Closure, Domain^operators, Domain^objects, create_null_plan(Domain), plan(Actions, OutOrder, _)),
@@ -436,14 +456,47 @@ main(!IO):-
 	
     then
 	poset.to_total(OutOrder, OutPlan),
-	write_list(OutPlan, ", ", logic.write, !IO),
-	nl(!IO),
-	nl(!IO),
-	% poset.debug_to_list(OutOrder, OutList) ,
-	% write_list(OutList, "\n", (pred({X, Y}::in, !.YO::di, !:YO::uo) is det :-
-	%     logic.write(X, !YO), write_string(":",!YO), logic.write(Y, !YO)), !IO),
-	write_list(set.to_sorted_list(Actions), " ,", print_action, !IO)
+	%later add actually verifying the domain here
+	Fold = (pred(ActionName::in, StateIn::in, StateOut::out) is cc_multi :-
+	    (if
+		member(Action, Actions),
+		Action ^ name = ActionName
+	    then
+		set.insert_list(Action ^ effects_add, StateIn, StateMid),
+		set.delete_list(Action ^ effects_remove, StateMid, StateOut),
+		(if
+		    %confirm that the preconditions of an action are present in the current state
+		    set.intersect(StateIn, set.from_list(Action ^ effects_remove), Same),
+		    set.equal(Same, set.from_list(Action ^ effects_remove))
+		then
+		    true
+		else
+		    error("Not all preconditions of an action are present in a state!")
+		)
+		
+	    else
+		error("Plan referened action that is not in the set of instantiated actions!")
+	    )
+	),
+	    list.foldl(Fold, OutPlan, set.from_list(Domain ^ initial), Goal),
+	    (if
+		set.subset(set.from_list(Domain ^ goal), Goal)
+	    then
+		write_list(OutPlan, ", ", logic.write, !IO)
+	    else
+		error("Action sequence given does not lead to solution!")
+	    )
+		
     else
-	io.write("No solution found.", !IO),
-	nl(!IO)
+	error("No solutions found!")
     ).
+
+
+main(!IO):-
+    %test_domain(sussmann_domain, !IO),
+    %test_domain(airport_domain, !IO),
+    %test_domain(tire_domain, !IO),
+    %the world isn't yet ready for these two
+    test_domain(robot_domain, !IO) 
+    %test_domain(gripper_domain, !IO)
+    .

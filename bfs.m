@@ -105,11 +105,11 @@ bfs1(Q1, Goal, Arc, GoalEv):-
 	trace [io(!IO), state(depth, !Depth)] (
 	    NewNodes = list.length(NewPaths):int,
 	    io.write(NewNodes, !IO),
-	    io.write_string(" new paths found", !IO),
+	    io.write_string(" new refinements found", !IO),
 	    io.nl(!IO),
 	    io.write_string("Total: ", !IO),
 	    io.write(queue.length(Q3):int, !IO),
-	    io.write_string(" nodes on level ", !IO),
+	    io.write_string(" plans on level ", !IO),
 	    io.write(!.Depth, !IO),
 	    io.nl(!IO),
 
