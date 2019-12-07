@@ -65,14 +65,9 @@ bfs(S, Goal, Successor, GoalEv):-
     ).
 
 :- mutable(depth, int, 0, ground, [untrailed]).
-%Note: I need a backtracking-proof setup here. Right now its quite funny.
-%I like that mercury allows for these prolog-like tricks actually, if you need them.
 
-%The backtracking guard basically needs to be able to tell apart when a trace is refired due to recursion, and when its refired due to backtracking.
 
-%I eat my words, its trickier then I expected.
-
-%I will have to analize this later. I'm sure this is possible.
+%TODO: change bfs1 so that it generates the solutons first, and then uses them both to verify if a goal is reacheable and to add them to the queue for later.
 
 :- pred bfs1(queue.queue(list.list(Node)), Node, pred(Node, Node), (pred Node)).
 :- mode bfs1(in, out, successor, goal) is nondet. 

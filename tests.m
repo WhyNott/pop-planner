@@ -29,9 +29,9 @@
 %who knows, maybe if I fix it, it will actually solve in half-decent time?
     %good joke.
 
-%riight, so why is the robots scenario failing?
+%The tire domain is broken now! What will they think of next?
 
-%I have a sneaking suspicion that whatever is causing the gripper scenario to fail, is the exact same reason for why the robot scenario doesn't either.
+%You know, it occured to me that its probably a very good idea I have all these example domains for testing here. At this point each and every single one of them have proven useful for something.
 
 % ------------------------ sussmann anomaly ----------------------------
 
@@ -407,16 +407,6 @@ print_action(Action, !IO):-
     io.nl(!IO).
 
 
-
-%I hate to say it, but my planner is just really fucking slow.
-
-%Sooner or later, the performace heuristics will become a neccesity.
-
-%In the meantime, I will turn this module into a regression test suite.
-
-%TODO: implement a predicate that verifies that a plan is correct, by applying all the actions step by step and seeing if one arrives at the goal.
-%(Seems like a liberal application of fold should be sufficient)
-
 :- func create_null_plan(planner_data_structures.domain) = pop.plan.
 create_null_plan(Domain) = plan(
     set.from_list([
@@ -495,8 +485,8 @@ test_domain(Domain, !IO):-
 main(!IO):-
     %test_domain(sussmann_domain, !IO),
     %test_domain(airport_domain, !IO),
-    %test_domain(tire_domain, !IO),
+    test_domain(tire_domain, !IO)
     %the world isn't yet ready for these two
-    test_domain(robot_domain, !IO) 
+    %test_domain(robot_domain, !IO) 
     %test_domain(gripper_domain, !IO)
     .

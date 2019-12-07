@@ -209,8 +209,9 @@ unify(X, Y, NC, !MGU):-
 
 %Noncodesignants mean that one cannot be assigned to other.
 %Steps:
-% substitute all values in noncodesignants with MGU
+% substitute all values in g with MGU
 % verify that for that substituted list, there are no equal values 
+
 
 bindings_allowed(Noncodesignants, MGU):-
     Substituted = list.map((func({X, Y}) = {apply_substitution(to_term(X), MGU),

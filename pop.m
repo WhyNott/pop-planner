@@ -205,6 +205,20 @@ verify_action_threat(Action, !Node):-
 
 
 
+        % trace [io(!IO)] (
+		%     io.write_string("Ordering ", !IO), 
+		%     io.write(Act^name, !IO),
+		%     io.nl(!IO),
+		%     io.write_string(" <  ", !IO),
+		%     io.nl(!IO),
+		%     io.write(Ne, !IO),
+		%     io.nl(!IO),
+		%     io.write_string(" cannot be inserted into poset: ", !IO),
+		%     poset.to_total(!.Node ^ plan ^ o, Total),
+		%     io.nl(!IO),
+		%     io.write(Total, !IO),
+		%     io.nl(!IO)
+		% ),
 
 
 	  
@@ -224,42 +238,23 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
 	Fold = (pred({Q_n, Ne}::in, {Num_old, Set_old}::in, New::out) is semidet:-
 	    
 	    Lambda = (pred(Out::out) is nondet:-
-		Out = {Q_n, Res, IsF, Ne},
-		(if
-		    member(Act, (!.Node ^ plan ^ a)),
-		    member(Q_n, Act^effects_add)
-		then
-		    Res = Act,
-		    IsF = no,
-		    (if
-		  poset.orderable(Act^name, Ne, !.Node ^ plan ^ o) %cf
-	      then
-		  true
-	      else
-		  % trace [io(!IO)] (
-		  %     io.write_string("Ordering ", !IO), 
-		  %     io.write(Act^name, !IO),
-		  %     io.nl(!IO),
-		  %     io.write_string(" <  ", !IO),
-		  %     io.nl(!IO),
-		  %     io.write(Ne, !IO),
-		  %     io.nl(!IO),
-		  %     io.write_string(" cannot be inserted into poset: ", !IO),
-		  %     poset.to_total(!.Node ^ plan ^ o, Total),
-		  %     io.nl(!IO),
-		  %     io.write(Total, !IO),
-		  %     io.nl(!IO)
-		  % ),
-		  fail)
-		else
-		    %All the stuff related to grounding the operator will go here
-		    member(Operator, Operators),
-		    member(Term, Operator^free_action^effects_add),
-		    unify(Term, Q_n, Operator^noncodesignants, sub_init, MGU),
-		    bind_operator(Operator, Objects, Res, MGU),
-		    IsF = yes
-		)
-	    ),
+    Out = {Q_n, Res, IsF, Ne},
+    (if
+	member(Act, (!.Node ^ plan ^ a)),
+	member(Q_n, Act^effects_add),
+	poset.orderable(Act^name, Ne, !.Node ^ plan ^ o) %cf
+    then
+        Res = Act,
+	IsF = no
+    else
+	%All the stuff related to grounding the operator will go here
+	member(Operator, Operators),
+	member(Term, Operator^free_action^effects_add),
+	unify(Term, Q_n, Operator^noncodesignants, sub_init, MGU),
+	bind_operator(Operator, Objects, Res, MGU),
+	IsF = yes
+    )
+),
 	    solutions_set(Lambda, Set),
 		    Count = set.count(Set),
 		    (if 
@@ -306,7 +301,8 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
 	    else
 		trace [io(!IO)] (io.write_string("Link threat unresolvable!", !IO), io.nl(!IO)),
 		fail),
-	update_L(NewLink, !Node),
+	    update_L(NewLink, !Node),
+	    poset.orderable(Action^name, Need, !.Node ^ plan ^ o), %cf
 	update_O(Action^name, Need, !Node),
 	
 	(if
