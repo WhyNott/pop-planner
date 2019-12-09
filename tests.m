@@ -28,10 +28,10 @@
 %so the gripper scenario is failing again.
 %who knows, maybe if I fix it, it will actually solve in half-decent time?
     %good joke.
-
-%The tire domain is broken now! What will they think of next?
-
-%You know, it occured to me that its probably a very good idea I have all these example domains for testing here. At this point each and every single one of them have proven useful for something.
+    
+%hokay, here is what we need to do:
+%dump the contents of the poset at the time of the failure, so that I can create a failing test case in my poset test suite
+ 
 
 % ------------------------ sussmann anomaly ----------------------------
 
@@ -197,7 +197,7 @@ tire_operators(!VarSup) =
 	    []
    ),
    operator(
-       action(name("PutOn", [T, Axle]),
+       action(name("PutOn", [T, NotAxle]),
 	   [tire(T), at(T, floor), at(flat, NotAxle)],
 	   [at(T, axle)],
 	   [at(T, floor)]
@@ -216,7 +216,6 @@ tire_operators(!VarSup) =
    create_wrap_var(A, !VarSup),
    create_wrap_var(B, !VarSup),
    create_wrap_var(T, !VarSup),
-   create_wrap_var(Axle, !VarSup),
    create_wrap_var(NotAxle, !VarSup).
 
 :- func tire_domain = planner_data_structures.domain.
@@ -483,10 +482,10 @@ test_domain(Domain, !IO):-
 
 
 main(!IO):-
-    %test_domain(sussmann_domain, !IO),
-    %test_domain(airport_domain, !IO),
-    test_domain(tire_domain, !IO)
+    test_domain(sussmann_domain, !IO),
+    test_domain(airport_domain, !IO),
+    test_domain(tire_domain, !IO),
     %the world isn't yet ready for these two
-    %test_domain(robot_domain, !IO) 
-    %test_domain(gripper_domain, !IO)
+    test_domain(robot_domain, !IO), 
+    test_domain(gripper_domain, !IO)
     .

@@ -308,6 +308,8 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
 	(if
 	    IsFresh = yes
 	then
+	    poset.orderable(Initial, Action^name, !.Node ^ plan ^ o), %cf
+	    poset.orderable(Action^name, Final, !.Node ^ plan ^ o), %cf
 	    update_O(Initial, Action^name, !Node),
 	    update_O(Action^name, Final, !Node),
 	    (if
@@ -326,44 +328,12 @@ pop(Agenda, {Initial, Final}, Operators, Objects, !Plan):-
 	  else
 	      
 	    update_Agenda(Xs, !Node)
-	)% ,
-	 %    %remove this trace once you think you can get a result
-	 %    trace [io(!IO)] (
-	 % 	poset.to_total(!.Node ^ plan ^ o, Total),
-	 % 	io.write(Total, !IO), io.nl(!IO))
+	),
+	    %remove this trace once you think you can get a result
+	    trace [io(!IO)] (
+	 	poset.to_total(!.Node ^ plan ^ o, Total),
+	 	io.write(Total, !IO), io.nl(!IO))
      ),
 
      bfs(node(!.Plan, Agenda), node(!:Plan, _), Successor, Goal).
 
-
-/*
-main(!IO):-
-    
-	action(
-	    "initial-state",
-	    [],
-	    [on(a, table), on(b, table), on(c, a), clear(b), clear(c)],
-	    []),
-	action(
-	    "goal-state",
-	    [on(a, b), on(b, c)],
-	    [],
-	    [])
-	]),
-    poset.add("initial-state", "goal-state", poset.init, NullOrder),
-    NullPlan = plan(NullAction, NullOrder, set.init),
-    Closure = {"initial-state", "goal-state"},
-    Agenda = [{on(b, c), "goal-state"}, {on(a, b), "goal-state"} ],
-    (if
-	pop(Agenda, Closure, NullPlan, plan(_, OutOrder, _))
-    then
-	poset.to_total(OutOrder, OutPlan),
-	print(OutPlan, !IO),
-	nl(!IO),
-	nl(!IO),
-	print(OutOrder, !IO)
-    else
-	write("No solution found.", !IO),
-	nl(!IO)
-    ).
-*/	

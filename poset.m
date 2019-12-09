@@ -45,6 +45,9 @@
 :- implementation.
 :- import_module list.
 
+%%This is super ugly. There is no need to use a V -> unit map, I can just use a set and it will have the same exact result. Why didn't I think of it??TODO
+
+
 % For every vertex (in this case, action) we store a map where the keys are
 %all the elements that are preceeded by it (the value can be unit for example).
 %When we check if two elements can be ordered one before another, we check if
@@ -71,6 +74,7 @@
 :- import_module map.
 :- import_module set.
 
+:- import_module require.
 % I need to change it, so that it also stores a set of all elements in the poset.
 :- type poset(V) ---> poset(elems::set(V), order::map(V, map(V, unit))).
 
@@ -117,7 +121,7 @@ poset.add(A, B, !Poset):-
 	    V = W
 	)
     ),
-    map_values(Transform, !Poset).
+	    map_values(Transform, !Poset).
 
 poset.add(A, B, In) = Out :- poset.add(A, B, In, Out).
 
@@ -134,6 +138,25 @@ poset.consistent(Poset):-
 	map.foldl(CheckAdjecency, Adj, unit, _)),
     map.foldl(CheckVertices, Poset^order, unit, _).
 
+%same as poset.consistent but errors out instead of failing
+:- import_module string.
+
+:- pred consistent_det(poset.poset(V)).
+:- mode consistent_det(in) is det.
+poset.consistent_det(Poset):-
+    CheckVertices = (pred(B::in, Adj::in, _::in, unit::out) is det :-
+	CheckAdjecency = (pred(A::in, _::in, _::in, unit::out) is det :-
+	    (if
+		poset.contains(B, A, Poset)
+	    then
+		ErrStr = format("Ordering %s < %s is inconsistent!", [s(string(A)), s(string(B))]),
+		error(ErrStr)
+	    else
+		true
+	    )),
+	map.foldl(CheckAdjecency, Adj, unit, _)),
+    map.foldl(CheckVertices, Poset^order, unit, _).
+
 
 :- pred contains(V, V, poset(V)).
 :- mode contains(in, in, in) is semidet.
@@ -143,6 +166,7 @@ poset.contains(A, B, Poset):-
 
 
 poset.orderable(A, B, Poset):-
+    A \= B,
     \+ contains(B, A, Poset).
     
 poset.before(A, Poset, List):-
