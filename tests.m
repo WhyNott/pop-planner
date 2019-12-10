@@ -326,8 +326,8 @@ gripper_domain = domain(
     [room_a, room_b, ball1, ball2, ball3, ball4, left, right],
     [room(room_a), room(room_b), ball(ball1), ball(ball2),
     ball(ball3), ball(ball4), gripper(left), gripper(right),
-    at_robby(room_a), at(ball2, room_a),
-    at(ball3, room_a), at(ball4, room_a)],
+    at_robby(room_a), at(ball1, room_a), at(ball2, room_a),
+    at(ball3, room_a), at(ball4, room_a), freee(left), freee(right)],
     [at(ball1, room_b), at(ball2, room_b), at(ball3, room_b)]
 ).
 
@@ -432,7 +432,7 @@ create_agenda(Domain) = list.map(Lambda, Domain^goal) :-
 %1. Starts with the initial state
 %2. Goes through the totally ordered plan, and for each action inside, applies
 %the action's add and remove lists to the state
-%3. After the list is finished, verifies that the goal is a subset of the final state.
+%3. After the list is finised, verifies that the goal is a subset of the final state.
 
 
 :- pred test_domain(planner_data_structures.domain, io.state, io.state).
@@ -480,12 +480,78 @@ test_domain(Domain, !IO):-
 	error("No solutions found!")
     ).
 
+:- import_module string.
+
+:- pred test_gripper_domain(io::di, io::uo) is cc_multi.
+test_gripper_domain(!IO):-
+    OutPlan = [name("pick", [ball1, room_a, left]), name("move", [room_a, room_b]), name("drop", [ball1, room_b, left]), name("move", [room_b, room_a]), name("pick", [ball2, room_a, left]), name("pick", [ball3, room_a, right]), name("move", [room_a, room_b]),  name("drop", [ball2, room_b, left]), name("drop", [ball3, room_b, right])]:list(name),
+
+    GroundActions = (pred(name(ActionName, Variables, _)::in, Gr::out) is nondet :-
+	
+	member(Operator, gripper_domain^operators),
+	Operator^free_action^name = name(ActionName, _, _),
+	    Lambda =
+	(pred(VarFree::in,VarGround::in, MGUin::in, MGUout::out) is nondet :-
+	    logic.unify(VarFree, VarGround, []:list({disjunct, disjunct}), MGUin, MGUout)
+	),
+	    Operator^free_action^name = name(ActionName, Vars, C),
+	    list.foldl_corresponding(Lambda, Vars, Variables, sub_init, MGU),
+	    Gr = action(
+		name(ActionName, apply_sub_to_list(Vars, MGU), C),
+		apply_sub_to_list(Operator^free_action^preconds, MGU),
+		apply_sub_to_list(Operator^free_action^effects_add, MGU),
+		apply_sub_to_list(Operator^free_action^effects_remove, MGU)
+	    )
+	),
+		(if
+		    list.map(GroundActions, OutPlan, A)
+		then
+		    Actions = A
+		else
+		    error("boo-hoo")
+		),
+		    
+		%later add actually verifying the domain here
+		Fold = (pred(ActionName::in, StateIn::in, StateOut::out) is multi :-
+		    (if
+			member(Action, Actions),
+			Action ^ name = ActionName
+		    then
+			set.insert_list(Action ^ effects_add, StateIn, StateMid),
+			set.delete_list(Action ^ effects_remove, StateMid, StateOut),
+			(if
+			    %confirm that the preconditions of an action are present in the current state
+			    set.superset(StateIn, set.from_list(Action ^ preconds))
+			  
+			then
+		    true
+		else
+		    set.intersect(StateIn, set.from_list(Action ^ preconds), Same),
+		    set.difference(Same, set.from_list(Action ^ preconds), Diff),
+		    Str = string.format("Not all preconditions of an action are present in a state!\n Action: %s \n Missing precondition: %s", [s(string(Action^name)), s((Diff ^ set.to_sorted_list:list(logic.disjunct)) ^ string)]),
+		    error(Str)
+		)
+		    
+	    else
+		error("Plan referened action that is not in the set of instantiated actions!")
+	    )
+	),
+		list.foldl(Fold, OutPlan, set.from_list(gripper_domain ^ initial), Goal),
+		(if
+		    set.subset(set.from_list(gripper_domain ^ goal), Goal)
+		then
+		    io.write("Domain is correct; example plan leads to solution.", !IO)
+		else
+		    error("Action sequence given does not lead to solution!")
+		)
+		.
 
 main(!IO):-
-    test_domain(sussmann_domain, !IO),
-    test_domain(airport_domain, !IO),
-    test_domain(tire_domain, !IO),
+    %test_domain(sussmann_domain, !IO),
+    %test_domain(airport_domain, !IO),
+    %test_domain(tire_domain, !IO),
     %the world isn't yet ready for these two
-    test_domain(robot_domain, !IO), 
+    %test_domain(robot_domain, !IO), 
     test_domain(gripper_domain, !IO)
+    %test_gripper_domain(!IO)
     .

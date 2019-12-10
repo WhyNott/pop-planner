@@ -45,8 +45,6 @@
 :- implementation.
 :- import_module list.
 
-%%This is super ugly. There is no need to use a V -> unit map, I can just use a set and it will have the same exact result. Why didn't I think of it??TODO
-
 
 % For every vertex (in this case, action) we store a map where the keys are
 %all the elements that are preceeded by it (the value can be unit for example).
@@ -76,12 +74,12 @@
 
 :- import_module require.
 % I need to change it, so that it also stores a set of all elements in the poset.
-:- type poset(V) ---> poset(elems::set(V), order::map(V, map(V, unit))).
+:- type poset(V) ---> poset(elems::set(V), order::map(V, set(V))).
 
 %ugh this will require tons of fixing
 %and some boilerplate functions
 
-:- pred map_insert(V, map(V, unit.unit), poset.poset(V), poset.poset(V)).
+:- pred map_insert(V, set(V), poset.poset(V), poset.poset(V)).
 :- mode map_insert(in, in, in, out) is det.
 poset.map_insert(Key, Value, poset(E, O), poset(E, ONew)) :-
 	map.set(Key, Value, O, ONew).
@@ -91,7 +89,7 @@ poset.map_insert(Key, Value, poset(E, O), poset(E, ONew)) :-
 poset.set_insert(Element, poset(E, O), poset(ENew, O)):-
     set.insert(Element, E, ENew).
 
-:- pred map_values(pred(K, map(K, unit.unit), map(K, unit.unit)), poset.poset(K), poset.poset(K)).
+:- pred map_values(pred(K, set(K), set(K)), poset.poset(K), poset.poset(K)).
 :- mode map_values(di(/* unique */(pred((ground >> ground), (ground >> ground), (free >> ground)) is det)), in, out) is det.
 poset.map_values(Pred, poset(E, O), poset(E, ONew)) :-
     map.map_values(Pred, O, ONew).
@@ -100,13 +98,21 @@ poset.init(poset(set.init, map.init)).
 poset.init = poset(set.init, map.init).
 
 poset.add(A, B, !Poset):-
+    InitialPoset = !.Poset,
+    (if
+	poset.orderable(A,B, !.Poset)
+    then
+	true
+    else
+	error("beep boop")
+    ),
     (if
 	map.search(!.Poset^order, B, Adj_t)
     then
-	map.set(A, unit, Adj_t, Adj_new),
+	set.insert(A, Adj_t, Adj_new),
 	map_insert(B, Adj_new, !Poset)
     else
-	map_insert(B, map.singleton(A, unit), !Poset),
+	map_insert(B, set.make_singleton_set(A), !Poset),
 	set_insert(B, !Poset)
     ),
     set_insert(A, !Poset),
@@ -114,13 +120,29 @@ poset.add(A, B, !Poset):-
 	%Or maybe I'm wrong?
     Transform = (pred(_::in, V::in, W::out) is det :-
 	(if
-	    map.contains(V, B)
+	    set.contains(V, B)
 	then
-	    map.set(A, unit, V, W)
+	    set.insert(A, V, W)
 	else
 	    V = W
 	)
     ),
+	    (if
+		poset.consistent(!.Poset)
+	    then
+		true
+	    else
+		(if
+		    poset.consistent(InitialPoset)
+		then
+		    error("previous poset already inconsistent??")
+		else
+		    poset.pretty_string(InitialPoset, PosetStr),
+		    Str = string.format("Inserting %s < %s gives an inconsistent result in poset: \n %s", [s(string(A)), s(string(B)), s(PosetStr)]),
+		    error(Str)
+		)
+	    ),
+		
 	    map_values(Transform, !Poset).
 
 poset.add(A, B, In) = Out :- poset.add(A, B, In, Out).
@@ -131,11 +153,13 @@ poset.add(A, B, In) = Out :- poset.add(A, B, In, Out).
 %before it is also ordered after it for some reason. This is a slow method, but
 %I only ever use it in the testing suite anyway. 
 
+%TODO: I just proved that this basically does not work. I need to reproduce it in the test suite, and then fix it (or replace with tarjan cycle check if neccessary).
+
 poset.consistent(Poset):-
     CheckVertices = (pred(B::in, Adj::in, _::in, unit::out) is semidet :-
-	CheckAdjecency = (pred(A::in, _::in, _::in, unit::out) is semidet :-
+	CheckAdjecency = (pred(A::in,  _::in, unit::out) is semidet :-
 	    \+ poset.contains(B, A, Poset)),
-	map.foldl(CheckAdjecency, Adj, unit, _)),
+	set.foldl(CheckAdjecency, Adj, unit, _)),
     map.foldl(CheckVertices, Poset^order, unit, _).
 
 %same as poset.consistent but errors out instead of failing
@@ -145,16 +169,23 @@ poset.consistent(Poset):-
 :- mode consistent_det(in) is det.
 poset.consistent_det(Poset):-
     CheckVertices = (pred(B::in, Adj::in, _::in, unit::out) is det :-
-	CheckAdjecency = (pred(A::in, _::in, _::in, unit::out) is det :-
+	CheckAdjecency = (pred(A::in, _::in, unit::out) is det :-
 	    (if
 		poset.contains(B, A, Poset)
 	    then
-		ErrStr = format("Ordering %s < %s is inconsistent!", [s(string(A)), s(string(B))]),
+		poset.pretty_string(Poset, PosetStr),
+		(if
+		    poset.orderable(A, B, Poset)    
+		then
+		    ErrStr = format("Ordering %s < %s is inconsistent, and yet is said to be orderable! \n Poset: \n %s", [s(string(A)), s(string(B)), s(PosetStr)])
+		else
+		    ErrStr = format("Ordering %s < %s is inconsistent! \n Poset: \n %s", [s(string(A)), s(string(B)), s(PosetStr)])
+		),
 		error(ErrStr)
 	    else
 		true
 	    )),
-	map.foldl(CheckAdjecency, Adj, unit, _)),
+	set.foldl(CheckAdjecency, Adj, unit, _)),
     map.foldl(CheckVertices, Poset^order, unit, _).
 
 
@@ -162,18 +193,18 @@ poset.consistent_det(Poset):-
 :- mode contains(in, in, in) is semidet.
 poset.contains(A, B, Poset):-
     map.search(Poset^order, B, Adj),
-    map.contains(Adj, A).
+    set.contains(Adj, A).
 
 
 poset.orderable(A, B, Poset):-
     A \= B,
     \+ contains(B, A, Poset).
-    
+
 poset.before(A, Poset, List):-
     (if
 	map.search(Poset^order, A, Adj)
     then
-	map.keys(Adj, List)
+	set.to_sorted_list(Adj, List)
     else
 	List = []
     ).
@@ -185,6 +216,16 @@ poset.before(A, Poset) = List :- poset.before(A, Poset, List).
 poset.to_total(Poset, OutList):-
     i_sort(Poset, set.to_sorted_list(Poset^elems), [], OutList).
 
+:- import_module assoc_list.
+
+
+:- pred pretty_string(poset.poset(K), string).
+:- mode pretty_string(in, out) is det.
+poset.pretty_string(Poset, String):-
+    map.to_assoc_list(Poset^order, AList),
+	
+    assoc_list.map_values_only(set.to_sorted_list, AList, Out),
+    String=string(Out).
 
 
 

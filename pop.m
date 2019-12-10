@@ -104,6 +104,8 @@ action_dethrone(action(N, P, Ea, Er)) =
 %I feel like this is discrete enough, it can stay as a separate function.
 %What does it do? It binds an operator. I get it. No ambiguity here, really.
 
+
+%fix unifing noncodesignant inefficiency
 :- pred bind_operator(operator, list.list(object), action, logic.substitution).
 :- mode bind_operator(in, in, out, in) is nondet.
 bind_operator(Operator, Objects, Action, MGU_init):-
